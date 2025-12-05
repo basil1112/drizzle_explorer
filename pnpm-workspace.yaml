@@ -1,2 +1,5 @@
 ignoredBuiltDependencies:
+  - koffi
+
+onlyBuiltDependencies:
   - electron

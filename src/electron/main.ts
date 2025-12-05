@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, Menu } from 'electron';
 import * as path from 'path';
 import { registerFileSystemHandlers } from './api/ipcHandlers';
 
@@ -9,16 +9,16 @@ function createWindow() {
     width: 1200,
     height: 800,
     webPreferences: {
-      preload: path.join(__dirname, 'renderer/preload.js'),
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../index.html'));
+  mainWindow.loadFile(path.join(__dirname, '../../index.html'));
   
   // Open DevTools in development
-  // mainWindow.webContents.openDevTools();
+ mainWindow.webContents.openDevTools();
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -26,6 +26,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Remove default menu
+  Menu.setApplicationMenu(null);
+  
   // Register IPC handlers
   registerFileSystemHandlers();
   

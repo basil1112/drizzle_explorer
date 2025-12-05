@@ -1,0 +1,296 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* PrimeReact Theme */
+@import 'primereact/resources/themes/lara-dark-blue/theme.css';
+@import 'primereact/resources/primereact.min.css';
+@import 'primeicons/primeicons.css';
+
+.app_root {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 160px;
+  height: 100vh;
+  background-color: #2a2a2a;
+  padding: 20px;
+  position: fixed;
+  top: 0;
+  left: 0;
+  overflow-y: auto;
+}
+
+.sidebar h5 {
+  color: #fff;
+  margin-bottom: 20px;
+}
+
+.sidebar h6 {
+  margin-top: 25px;
+  color: #888;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.sidebar a {
+  color: #ccc;
+  text-decoration: none;
+  display: block;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  transition: all 0.2s;
+}
+
+.sidebar a:hover {
+  color: white;
+  background-color: #3e3e3e;
+}
+
+.sidebar a.active {
+  background-color: #094771;
+  color: white;
+}
+
+.content {
+  margin-left: 280px;
+  padding: 25px;
+  min-height: 100vh;
+}
+
+.tile {
+  background-color: #333;
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+.tile:hover {
+  background-color: #3e3e3e;
+  transform: translateY(-2px);
+}
+
+.drive-card {
+  background-color: #2f2f2f;
+  padding: 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.drive-card:hover {
+  background-color: #3a3a3a;
+  transform: translateY(-2px);
+}
+
+.progress {
+  height: 6px;
+  background-color: #1e1e1e;
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: #666;
+}
+
+.breadcrumb-nav {
+  background-color: #2a2a2a;
+  padding: 15px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.back-button {
+  background: #0e639c;
+  border: none;
+  color: white;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s;
+}
+
+.back-button:hover {
+  background: #1177bb;
+}
+
+.back-button:disabled {
+  background: #3e3e42;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.current-path {
+  flex: 1;
+  padding: 8px 15px;
+  background: #1e1e1e;
+  border-radius: 4px;
+  font-family: 'Consolas', monospace;
+  font-size: 13px;
+  color: #ddd;
+}
+
+.file-table {
+  background-color: #2a2a2a;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.file-table table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+}
+
+.file-table thead {
+  background-color: #333;
+}
+
+.file-table th {
+  padding: 12px 15px;
+  color: #888;
+  font-weight: 500;
+  font-size: 13px;
+  border-bottom: 1px solid #3e3e42;
+  text-align: left;
+}
+
+.file-table td {
+  padding: 12px 15px;
+  border-bottom: 1px solid #3e3e42;
+  color: #ddd;
+}
+
+.file-table tbody tr {
+  transition: background-color 0.2s;
+}
+
+.file-table tbody tr:hover {
+  background-color: #333;
+}
+
+.file-icon {
+  margin-right: 10px;
+  font-size: 16px;
+}
+
+.folder-icon {
+  color: #dcb67a;
+}
+
+.file-icon-generic {
+  color: #89d185;
+}
+
+.loading,
+.error,
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #888;
+}
+
+.error {
+  color: #f48771;
+}
+
+.section-header {
+  margin-top: 30px;
+  margin-bottom: 15px;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+/* Bootstrap Grid Support */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -0.75rem;
+  margin-left: -0.75rem;
+}
+
+.col-md-2,
+.col-md-4,
+.col-md-6,
+.col-12 {
+  padding-right: 0.75rem;
+  padding-left: 0.75rem;
+}
+
+.col-md-2 {
+  flex: 0 0 auto;
+  width: 16.666667%;
+}
+
+.col-md-4 {
+  flex: 0 0 auto;
+  width: 33.333333%;
+}
+
+.col-md-6 {
+  flex: 0 0 auto;
+  width: 50%;
+}
+
+.col-12 {
+  flex: 0 0 auto;
+  width: 100%;
+}
+
+.g-3 {
+  margin-top: -0.75rem;
+}
+
+.g-3>* {
+  margin-top: 0.75rem;
+}
+
+.mb-4 {
+  margin-bottom: 1.5rem;
+}
+
+.mt-2 {
+  margin-top: 0.5rem;
+}
+
+.mb-1 {
+  margin-bottom: 0.25rem;
+}
+
+.bg-secondary {
+  background-color: #666;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1e1e1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #424242;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4e4e4e;
+}
