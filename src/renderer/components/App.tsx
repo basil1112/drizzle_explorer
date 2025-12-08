@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { Splitter, SplitterPanel } from 'primereact/splitter';
 import Sidebar from './Sidebar';
 import HomeView from './HomeView';
 import BrowserView from './BrowserView';
 import TopBar from './TopBar';
 import BreadcrumbBar from './BreadcrumbBar';
+import PreviewPanel from './PreviewPanel';
 
 interface DriveEntry {
     path: string;
@@ -31,6 +33,7 @@ interface TabState {
     files: FileEntry[];
     loading: boolean;
     error: string;
+    selectedFile: FileEntry | null;
 }
 
 const App: React.FC = () => {
@@ -45,7 +48,8 @@ const App: React.FC = () => {
             drive: '',
             files: [],
             loading: false,
-            error: ''
+            error: '',
+            selectedFile: null
         }
     ]);
     const [activeTabIndex, setActiveTabIndex] = useState<number>(0);
@@ -71,7 +75,11 @@ const App: React.FC = () => {
 
         // Update body background
         document.body.style.backgroundColor = darkMode ? '#1e1e1e' : '#f5f5f5';
-    }, [darkMode]); const loadDrives = async () => {
+    }, [darkMode]); 
+    
+    
+    
+    const loadDrives = async () => {
         try {
             const driveList = await window.electronAPI.getDrives();
             setDrives(driveList);
@@ -89,7 +97,8 @@ const App: React.FC = () => {
             drive: '',
             files: [],
             loading: false,
-            error: ''
+            error: '',
+            selectedFile: null
         };
         setTabs([...tabs, newTab]);
         setActiveTabIndex(tabs.length);
@@ -183,44 +192,34 @@ const App: React.FC = () => {
             path: '',
             drive: '',
             files: [],
-            title: 'Home'
+            title: 'Home',
+            selectedFile: null
         });
     };
 
-    const openQuickAccessFolder = (folderName: string) => {
-        // Construct path to user folder (Windows-specific)
-        const userProfile = 'C:\\Users\\' + (process.env.USERNAME || 'User');
-        let folderPath = '';
+    const openQuickAccessFolder = async (folderName: string) => {
+        try {
+            // Get the actual folder path from the system
+            const folderPath = await window.electronAPI.getSpecialFolder(folderName);
 
-        switch (folderName) {
-            case 'Desktop':
-                folderPath = userProfile + '\\Desktop';
-                break;
-            case 'Downloads':
-                folderPath = userProfile + '\\Downloads';
-                break;
-            case 'Documents':
-                folderPath = userProfile + '\\Documents';
-                break;
-            case 'Pictures':
-                folderPath = userProfile + '\\Pictures';
-                break;
-            case 'Music':
-                folderPath = userProfile + '\\Music';
-                break;
-            case 'Videos':
-                folderPath = userProfile + '\\Videos';
-                break;
+            if (folderPath) {
+                const currentTab = tabs[activeTabIndex];
+                updateTab(currentTab.id, {
+                    view: 'browser',
+                    title: folderName
+                });
+                loadDirectory(folderPath);
+            }
+        } catch (err) {
+            console.error('Error opening quick access folder:', err);
         }
+    };
 
-        if (folderPath) {
-            const currentTab = tabs[activeTabIndex];
-            updateTab(currentTab.id, {
-                view: 'browser',
-                title: folderName
-            });
-            loadDirectory(folderPath);
-        }
+    const handleFileSelect = (file: FileEntry) => {
+        const currentTab = tabs[activeTabIndex];
+        updateTab(currentTab.id, {
+            selectedFile: file
+        });
     };
 
     const currentTab = tabs[activeTabIndex];
@@ -248,38 +247,57 @@ const App: React.FC = () => {
                 />
             )}
 
-            {/* Tab Content - Each tab has its own Sidebar and Content */}
-            <div className="flex-1 flex overflow-hidden">
-                <Sidebar
-                    drives={drives}
-                    currentView={currentTab.view}
-                    currentDrive={currentTab.drive}
-                    darkMode={darkMode}
-                    onHomeClick={switchToHomeView}
-                    onDriveClick={selectDrive}
-                    onQuickAccessClick={openQuickAccessFolder}
-                />
+            {/* Tab Content - Splitter with Sidebar | BrowserView | PreviewSection */}
+            <div className="flex-1 overflow-hidden">
+                <Splitter style={{ height: '100%' }} className={darkMode ? 'dark-splitter' : 'light-splitter'}>
+                    {/* Sidebar Panel */}
+                    <SplitterPanel size={15} minSize={10} style={{ overflow: 'hidden',maxWidth: '280px' }}>
+                        <div className="h-full overflow-auto">
+                            <Sidebar
+                                drives={drives}
+                                currentView={currentTab.view}
+                                currentDrive={currentTab.drive}
+                                darkMode={darkMode}
+                                onHomeClick={switchToHomeView}
+                                onDriveClick={selectDrive}
+                                onQuickAccessClick={openQuickAccessFolder}
+                            />
+                        </div>
+                    </SplitterPanel>
 
-                <div className="flex-1 overflow-auto">
-                    {currentTab.view === 'home' ? (
-                        <HomeView
-                            drives={drives}
+                    {/* BrowserView Panel */}
+                    <SplitterPanel size={60} minSize={30} style={{ overflow: 'hidden' }}>
+                        <div className="h-full w-full overflow-auto">
+                            {currentTab.view === 'home' ? (
+                                <HomeView
+                                    drives={drives}
+                                    darkMode={darkMode}
+                                    onDriveClick={selectDrive}
+                                    onQuickAccessClick={openQuickAccessFolder}
+                                />
+                            ) : (
+                                <BrowserView
+                                    currentPath={currentTab.path}
+                                    files={currentTab.files}
+                                    loading={currentTab.loading}
+                                    error={currentTab.error}
+                                    darkMode={darkMode}
+                                    onBack={goBack}
+                                    onDirectoryClick={loadDirectory}
+                                    onFileSelect={handleFileSelect}
+                                />
+                            )}
+                        </div>
+                    </SplitterPanel>
+
+                    {/* Preview Panel */}
+                    <SplitterPanel  size={25} minSize={15} style={{ overflow: 'hidden',display: currentTab.selectedFile ? 'block' : 'none' }}>
+                        <PreviewPanel
+                            selectedFile={currentTab.selectedFile}
                             darkMode={darkMode}
-                            onDriveClick={selectDrive}
-                            onQuickAccessClick={openQuickAccessFolder}
                         />
-                    ) : (
-                        <BrowserView
-                            currentPath={currentTab.path}
-                            files={currentTab.files}
-                            loading={currentTab.loading}
-                            error={currentTab.error}
-                            darkMode={darkMode}
-                            onBack={goBack}
-                            onDirectoryClick={loadDirectory}
-                        />
-                    )}
-                </div>
+                    </SplitterPanel>
+                </Splitter>
             </div>
         </div>
     );

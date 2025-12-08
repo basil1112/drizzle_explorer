@@ -28,6 +28,11 @@ export function registerFileSystemHandlers() {
     return fileSystemController.getParentDirectory(currentPath);
   });
 
+  // Get Windows special folders
+  ipcMain.handle('get-special-folder', async (event, folderName: string) => {
+    return fileSystemController.getSpecialFolder(folderName);
+  });
+
   // File operations
   ipcMain.handle('copy-path', async (event, filePath: string) => {
     fileOperationsController.copyPath(filePath);

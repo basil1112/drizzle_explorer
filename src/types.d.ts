@@ -5,6 +5,7 @@ interface ElectronAPI {
   getDrives: () => Promise<DriveEntry[]>;
   readDirectory: (path: string) => Promise<FileEntry[]>;
   getParentDirectory: (path: string) => Promise<string | null>;
+  getSpecialFolder: (folderName: string) => Promise<string>;
   copyPath: (path: string) => Promise<boolean>;
   hasCopiedPath: () => Promise<boolean>;
   pastePath: (destinationDir: string) => Promise<boolean>;

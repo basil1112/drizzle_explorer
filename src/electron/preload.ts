@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDrives: (): Promise<DriveEntry[]> => ipcRenderer.invoke('get-drives'),
   readDirectory: (path: string): Promise<FileEntry[]> => ipcRenderer.invoke('read-directory', path),
   getParentDirectory: (path: string): Promise<string | null> => ipcRenderer.invoke('get-parent-directory', path),
+  getSpecialFolder: (folderName: string): Promise<string> => ipcRenderer.invoke('get-special-folder', folderName),
   copyPath: (path: string): Promise<boolean> => ipcRenderer.invoke('copy-path', path),
   hasCopiedPath: (): Promise<boolean> => ipcRenderer.invoke('has-copied-path'),
   pastePath: (destinationDir: string): Promise<boolean> => ipcRenderer.invoke('paste-path', destinationDir),

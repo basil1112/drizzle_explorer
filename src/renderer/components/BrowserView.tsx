@@ -11,6 +11,7 @@ import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { Dropdown } from 'primereact/dropdown';
 import { Slider } from 'primereact/slider';
+import { isVideo, isImage, formatFileSize } from '../utils/fileTypeUtils';
 
 interface FileEntry {
   name: string;
@@ -29,6 +30,7 @@ interface BrowserViewProps {
   darkMode: boolean;
   onBack: () => void;
   onDirectoryClick: (path: string) => void;
+  onFileSelect?: (file: FileEntry) => void;
 }
 
 const BrowserView: React.FC<BrowserViewProps> = ({
@@ -39,6 +41,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   darkMode,
   onBack,
   onDirectoryClick,
+  onFileSelect,
 }) => {
   const cm = useRef<ContextMenu>(null);
   const [selectedFile, setSelectedFile] = React.useState<FileEntry | null>(null);
@@ -128,13 +131,11 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   };
 
   const isVideoFile = (fileName: string): boolean => {
-    const videoExtensions = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpeg', '.mpg'];
-    return videoExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
+    return isVideo(fileName);
   };
 
   const isImageFile = (fileName: string): boolean => {
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.tiff', '.svg'];
-    return imageExtensions.some(ext => fileName.toLowerCase().endsWith(ext));
+    return isImage(fileName);
   };
 
   const handleConvert = () => {
@@ -527,14 +528,6 @@ const BrowserView: React.FC<BrowserViewProps> = ({
     cm.current?.show(e as any);
   };
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
   const nameBodyTemplate = (rowData: FileEntry) => {
     return (
       <div className="flex items-center gap-2">
@@ -840,6 +833,8 @@ const BrowserView: React.FC<BrowserViewProps> = ({
             onRowClick={(e) => {
               if (e.data.isDirectory) {
                 onDirectoryClick(e.data.path);
+              } else {
+                onFileSelect?.(e.data as FileEntry);
               }
             }}
             onContextMenu={(e) => {

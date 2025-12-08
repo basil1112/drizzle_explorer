@@ -162,4 +162,22 @@ export class FileSystemController {
       videos: path.join(homedir, 'Videos')
     };
   }
+
+  /**
+   * Get specific special folder path
+   */
+  getSpecialFolder(folderName: string): string {
+    const homedir = os.homedir();
+    const folderMap: Record<string, string> = {
+      'Desktop': path.join(homedir, 'Desktop'),
+      'Downloads': path.join(homedir, 'Downloads'),
+      'Documents': path.join(homedir, 'Documents'),
+      'Pictures': path.join(homedir, 'Pictures'),
+      'Music': path.join(homedir, 'Music'),
+      'Videos': path.join(homedir, 'Videos'),
+      'Home': homedir
+    };
+
+    return folderMap[folderName] || homedir;
+  }
 }

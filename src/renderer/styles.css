@@ -294,3 +294,38 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #4e4e4e;
 }
+
+/* Splitter Styles */
+.dark-splitter .p-splitter-gutter {
+  background: #2a2a2a;
+  border-left: 1px solid #3a3a3a;
+  border-right: 1px solid #3a3a3a;
+}
+
+.dark-splitter .p-splitter-gutter-handle {
+  background: #4a4a4a;
+}
+
+.dark-splitter .p-splitter-gutter:hover,
+.dark-splitter .p-splitter-gutter:hover .p-splitter-gutter-handle {
+  background: #5a5a5a;
+}
+
+.light-splitter .p-splitter-gutter {
+  background: #e0e0e0;
+  border-left: 1px solid #d0d0d0;
+  border-right: 1px solid #d0d0d0;
+}
+
+.light-splitter .p-splitter-gutter-handle {
+  background: #c0c0c0;
+}
+
+.light-splitter .p-splitter-gutter:hover,
+.light-splitter .p-splitter-gutter:hover .p-splitter-gutter-handle {
+  background: #b0b0b0;
+}
+
+.p-splitter {
+  border: none;
+}

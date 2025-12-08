@@ -83,7 +83,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       <div className="mb-4">
         <h6 className={`text-xs uppercase font-semibold mb-2 px-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'
           }`}>
-          Pinned1
+          Pinned
         </h6>
         <Menu model={pinnedItems} className="w-full border-none bg-transparent" />
       </div>
