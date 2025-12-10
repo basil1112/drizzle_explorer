@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProfile: (): Promise<any> => ipcRenderer.invoke('get-profile'),
   updateProfile: (name: string): Promise<any> => ipcRenderer.invoke('update-profile', name),
   regenerateUUID: (): Promise<any> => ipcRenderer.invoke('regenerate-uuid'),
-  readFileForTransfer: (path: string): Promise<ArrayBuffer> => ipcRenderer.invoke('read-file-for-transfer', path),
+  getFileInfo: (path: string): Promise<{fileName: string; fileSize: number}> => ipcRenderer.invoke('get-file-info', path),
+  readFileChunk: (path: string, offset: number, length: number): Promise<ArrayBuffer> => ipcRenderer.invoke('read-file-chunk', path, offset, length),
   saveReceivedFile: (fileName: string, data: Uint8Array): Promise<string> => ipcRenderer.invoke('save-received-file', fileName, data),
 });

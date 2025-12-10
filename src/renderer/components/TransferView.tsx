@@ -67,6 +67,8 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
     };
 
     const initializeConnection = (isInitiator: boolean) => {
+        console.log(`🔧 Initializing connection as ${isInitiator ? 'INITIATOR' : 'RECEIVER'}`);
+        
         if (webrtcRef.current) {
             webrtcRef.current.destroy();
         }
@@ -74,16 +76,36 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
         const webrtc = new WebRTCFileTransfer(isInitiator);
         webrtcRef.current = webrtc;
 
+        // Set mode and initial state
+        setMode(isInitiator ? 'send' : 'receive');
+        if (!isInitiator) {
+            // For receiver, set to waiting immediately since they need to paste offer
+            setConnectionState('waiting');
+            showMessage('info', 'Paste the sender\'s offer in the "Peer Connection Data" tab');
+        }
+
         webrtc.setOnSignal((signal) => {
+            console.log(`📡 Signal generated for ${isInitiator ? 'INITIATOR' : 'RECEIVER'}:`, signal.type);
             setMySignal(JSON.stringify(signal));
             setConnectionState('waiting');
-            showMessage('info', 'Copy your connection data and send it to the peer');
+            if (isInitiator) {
+                showMessage('info', 'Copy your connection data and send it to the peer');
+            } else {
+                showMessage('success', 'Answer generated! Copy your connection data and send it back to the sender');
+            }
         });
 
         webrtc.setOnProgress((progress) => {
             setTransferProgress(progress);
             if (progress.status === 'completed') {
-                showMessage('success', `Transfer completed: ${progress.fileName}`);
+                const savedPath = (progress as any).savedPath;
+                if (savedPath) {
+                    // Copy file path to clipboard
+                    navigator.clipboard.writeText(savedPath);
+                    showMessage('success', `File saved! Path copied to clipboard: ${savedPath}`);
+                } else {
+                    showMessage('success', `Transfer completed: ${progress.fileName}`);
+                }
             } else if (progress.status === 'error') {
                 showMessage('error', `Transfer failed: ${progress.error}`);
             }
@@ -93,10 +115,16 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
             setConnectionState(connected ? 'connected' : 'disconnected');
             if (connected) {
                 showMessage('success', 'Connected to peer!');
+            } else if (connectionState === 'connected') {
+                // Connection was lost
+                showMessage('error', 'Connection lost');
             }
         });
 
-        setMode(isInitiator ? 'send' : 'receive');
+        webrtc.setOnError((error) => {
+            console.error('WebRTC error:', error);
+            showMessage('error', error);
+        });
     };
 
     const connectToPeer = () => {
@@ -105,12 +133,19 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
             return;
         }
 
+        if (!webrtcRef.current) {
+            showMessage('error', 'Please create or join a connection first');
+            return;
+        }
+
         try {
             const signal = JSON.parse(peerSignal);
-            webrtcRef.current?.signal(signal);
-            showMessage('info', 'Connecting to peer...');
+            console.log('Signaling to peer:', signal);
+            webrtcRef.current.signal(signal);
+            showMessage('info', 'Processing connection data...');
         } catch (error: any) {
-            showMessage('error', 'Invalid connection data format');
+            console.error('Failed to parse peer signal:', error);
+            showMessage('error', `Invalid connection data: ${error.message}`);
         }
     };
 
@@ -236,19 +271,36 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                     </div>
 
                     {connectionState !== 'disconnected' && (
+                        <>
+                            {mode === 'receive' && !mySignal && (
+                                <div className={`p-4 rounded mb-4 ${darkMode ? 'bg-purple-900/20 border border-purple-800' : 'bg-purple-50 border border-purple-200'}`}>
+                                    <p className={`text-sm font-semibold mb-2 ${darkMode ? 'text-purple-200' : 'text-purple-800'}`}>
+                                        📝 Receiver Workflow:
+                                    </p>
+                                    <ol className={`text-sm space-y-1 ml-4 list-decimal ${darkMode ? 'text-purple-300' : 'text-purple-700'}`}>
+                                        <li>Go to <strong>"Peer Connection Data"</strong> tab below</li>
+                                        <li>Paste the <strong>sender's offer</strong> (the JSON data they sent you)</li>
+                                        <li>Click <strong>"Connect to Peer"</strong> button</li>
+                                        <li>Your answer will appear in <strong>"My Connection Data"</strong> tab</li>
+                                        <li>Copy your answer and send it back to the sender</li>
+                                    </ol>
+                                </div>
+                            )}
                         <TabView>
                             <TabPanel header="My Connection Data">
                                 <div className="space-y-2">
                                     <div className={`p-3 rounded mb-2 ${darkMode ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'}`}>
                                         <p className={`text-xs ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
-                                            <strong>Instructions:</strong> Copy the entire text below and send it to your peer via any messaging app (WhatsApp, Telegram, email, etc.)
+                                            <strong>Instructions:</strong> {mode === 'send' 
+                                                ? 'Copy the entire text below and send it to the receiver via any messaging app (WhatsApp, Telegram, email, etc.)'
+                                                : 'After pasting the sender\'s data and clicking Connect, your answer will appear here. Copy it and send it back to the sender.'}
                                         </p>
                                     </div>
                                     <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                                         Your Connection Data:
                                     </label>
                                     <InputTextarea
-                                        value={mySignal}
+                                        value={mySignal || (mode === 'receive' ? '⏳ Waiting... First paste the sender\'s offer in "Peer Connection Data" tab and click Connect. Your answer will appear here automatically.' : '')}
                                         readOnly
                                         rows={6}
                                         className="w-full font-mono text-xs"
@@ -267,7 +319,9 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                                 <div className="space-y-2">
                                     <div className={`p-3 rounded mb-2 ${darkMode ? 'bg-orange-900/20 border border-orange-800' : 'bg-orange-50 border border-orange-200'}`}>
                                         <p className={`text-xs ${darkMode ? 'text-orange-300' : 'text-orange-700'}`}>
-                                            <strong>Instructions:</strong> Paste the complete connection data you received from your peer. Make sure you paste the ENTIRE text (it should look like JSON).
+                                            <strong>Instructions:</strong> {mode === 'send' 
+                                                ? 'Paste the receiver\'s answer data here and click Connect to establish the connection.'
+                                                : 'Paste the sender\'s offer data here first, then click Connect. This will generate your answer in the other tab.'}
                                         </p>
                                     </div>
                                     <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
@@ -290,6 +344,7 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                                 </div>
                             </TabPanel>
                         </TabView>
+                        </>
                     )}
 
                     <div className="mt-4 flex items-center gap-2">

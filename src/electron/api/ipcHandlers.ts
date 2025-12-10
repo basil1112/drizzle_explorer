@@ -111,12 +111,29 @@ export function registerFileSystemHandlers() {
   });
 
   // File transfer operations
-  ipcMain.handle('read-file-for-transfer', async (event, filePath: string) => {
+  ipcMain.handle('get-file-info', async (event, filePath: string) => {
     try {
-      const buffer = await fs.readFile(filePath);
-      return buffer;
+      const stats = await fs.stat(filePath);
+      const fileName = path.basename(filePath);
+      return {
+        fileName,
+        fileSize: stats.size
+      };
     } catch (error: any) {
-      throw new Error(`Failed to read file: ${error.message}`);
+      throw new Error(`Failed to get file info: ${error.message}`);
+    }
+  });
+
+  ipcMain.handle('read-file-chunk', async (event, filePath: string, offset: number, length: number) => {
+    try {
+      const fileHandle = await fs.open(filePath, 'r');
+      const buffer = Buffer.allocUnsafe(length);
+      const { bytesRead } = await fileHandle.read(buffer, 0, length, offset);
+      await fileHandle.close();
+      
+      return buffer.slice(0, bytesRead);
+    } catch (error: any) {
+      throw new Error(`Failed to read file chunk: ${error.message}`);
     }
   });
 

@@ -8,6 +8,7 @@ export interface TransferProgress {
     status: 'waiting' | 'connecting' | 'transferring' | 'completed' | 'error' | 'cancelled';
     error?: string;
     speed?: number; // bytes per second
+    savedPath?: string; // Path where file was saved (for receiver)
 }
 
 export interface PeerConnection {
@@ -28,6 +29,7 @@ export class WebRTCFileTransfer {
     private onProgressCallback?: (progress: TransferProgress) => void;
     private onSignalCallback?: (signal: any) => void;
     private onConnectionCallback?: (connected: boolean) => void;
+    private onErrorCallback?: (error: string) => void;
     private transferCancelled: boolean = false;
     private currentTransfer: TransferProgress | null = null;
 
@@ -45,32 +47,39 @@ export class WebRTCFileTransfer {
         });
 
         this.peer.on('signal', (signal) => {
+            console.log('Signal generated:', signal.type || 'candidate');
             if (this.onSignalCallback) {
                 this.onSignalCallback(signal);
             }
         });
 
         this.peer.on('connect', () => {
-            console.log('WebRTC connection established');
+            console.log('✅ WebRTC connection established successfully!');
             if (this.onConnectionCallback) {
                 this.onConnectionCallback(true);
             }
         });
 
         this.peer.on('close', () => {
-            console.log('WebRTC connection closed');
+            console.log('⚠️ WebRTC connection closed');
             if (this.onConnectionCallback) {
                 this.onConnectionCallback(false);
             }
         });
 
         this.peer.on('error', (err) => {
-            console.error('WebRTC error:', err);
+            console.error('❌ WebRTC error:', err);
+            const errorMsg = err.message || err.toString();
+            
+            if (this.onErrorCallback) {
+                this.onErrorCallback(errorMsg);
+            }
+            
             if (this.currentTransfer) {
                 this.updateProgress({
                     ...this.currentTransfer,
                     status: 'error',
-                    error: err.message
+                    error: errorMsg
                 });
             }
         });
@@ -92,9 +101,21 @@ export class WebRTCFileTransfer {
         this.onConnectionCallback = callback;
     }
 
+    public setOnError(callback: (error: string) => void) {
+        this.onErrorCallback = callback;
+    }
+
     public signal(signalData: any) {
         if (this.peer) {
-            this.peer.signal(signalData);
+            console.log('Receiving signal:', signalData.type || 'unknown');
+            try {
+                this.peer.signal(signalData);
+            } catch (error: any) {
+                console.error('Failed to process signal:', error);
+                if (this.onErrorCallback) {
+                    this.onErrorCallback(`Signal error: ${error.message}`);
+                }
+            }
         }
     }
 
@@ -106,10 +127,8 @@ export class WebRTCFileTransfer {
         this.transferCancelled = false;
 
         try {
-            // Read file using Electron API
-            const fileBuffer = await window.electronAPI.readFileForTransfer(filePath);
-            const fileName = filePath.split(/[\\/]/).pop() || 'unknown';
-            const fileSize = fileBuffer.byteLength;
+            // Get file info first (don't load entire file)
+            const { fileName, fileSize } = await window.electronAPI.getFileInfo(filePath);
 
             // Initialize progress
             this.currentTransfer = {
@@ -129,7 +148,7 @@ export class WebRTCFileTransfer {
             });
             this.peer.send(metadata);
 
-            // Send file in chunks
+            // Send file in chunks by reading from disk as needed
             const startTime = Date.now();
             let bytesTransferred = 0;
 
@@ -139,7 +158,16 @@ export class WebRTCFileTransfer {
                     throw new Error('Transfer cancelled');
                 }
 
-                const chunk = fileBuffer.slice(offset, Math.min(offset + CHUNK_SIZE, fileSize));
+                // Read chunk from disk (on-demand, memory efficient)
+                const chunkSize = Math.min(CHUNK_SIZE, fileSize - offset);
+                const chunk = await window.electronAPI.readFileChunk(filePath, offset, chunkSize);
+                
+                // Wait for buffer to drain if it's getting full (backpressure)
+                const peerAny = this.peer as any;
+                while (peerAny._channel && peerAny._channel.bufferedAmount > CHUNK_SIZE * 4) {
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+                
                 this.peer.send(chunk);
 
                 bytesTransferred += chunk.byteLength;
@@ -188,71 +216,116 @@ export class WebRTCFileTransfer {
     private receivedBytes: number = 0;
 
     private handleIncomingData(data: any) {
+        console.log('📥 Received data:', typeof data, data instanceof ArrayBuffer ? `ArrayBuffer(${data.byteLength} bytes)` : data instanceof Uint8Array ? `Uint8Array(${data.length} bytes)` : 'object/string');
+        
         // Try to parse as JSON (metadata or control message)
-        if (typeof data === 'string' || data instanceof String) {
+        if (typeof data === 'string') {
             try {
-                const message = JSON.parse(data as string);
+                const message = JSON.parse(data);
+                console.log('📋 Parsed message from string:', message);
+                this.handleControlMessage(message);
+                return;
+            } catch (e) {
+                console.warn('⚠️ Failed to parse string as JSON:', e);
+            }
+        } else if (typeof data === 'object' && !ArrayBuffer.isView(data) && !(data instanceof ArrayBuffer)) {
+            // Data is already a parsed object (simple-peer sometimes does this)
+            console.log('📋 Received object directly:', data);
+            this.handleControlMessage(data);
+            return;
+        } else if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
+            // Could be either text (JSON) or binary chunk
+            // Try to decode as text first
+            try {
+                const uint8Array = data instanceof Uint8Array ? data : new Uint8Array(data);
+                const text = new TextDecoder().decode(uint8Array);
+                const message = JSON.parse(text);
                 
-                if (message.type === 'metadata') {
-                    this.receivedMetadata = {
-                        fileName: message.fileName,
-                        fileSize: message.fileSize
-                    };
-                    this.receivedChunks = [];
-                    this.receivedBytes = 0;
-
-                    this.currentTransfer = {
-                        fileName: message.fileName,
-                        fileSize: message.fileSize,
-                        bytesTransferred: 0,
-                        percentage: 0,
-                        status: 'transferring'
-                    };
-                    this.updateProgress(this.currentTransfer);
-                } else if (message.type === 'complete') {
-                    this.saveReceivedFile();
-                } else if (message.type === 'cancel') {
-                    if (this.currentTransfer) {
-                        this.currentTransfer = {
-                            ...this.currentTransfer,
-                            status: 'cancelled'
-                        };
-                        this.updateProgress(this.currentTransfer);
-                    }
-                    this.receivedChunks = [];
-                    this.receivedMetadata = null;
-                    this.receivedBytes = 0;
+                // If it parses successfully and has a type field, it's a control message
+                if (message.type) {
+                    console.log('📋 Decoded message from Uint8Array:', message);
+                    this.handleControlMessage(message);
+                    return;
                 }
             } catch (e) {
-                // Not JSON, ignore
+                // Not JSON, treat as binary chunk
             }
-        } else {
+            
             // Binary data chunk
             if (this.receivedMetadata) {
-                const chunk = new Uint8Array(data);
+                const chunk = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
                 this.receivedChunks.push(chunk);
                 this.receivedBytes += chunk.length;
+
+                const percentage = (this.receivedBytes / this.receivedMetadata.fileSize) * 100;
+                console.log(`📦 Chunk received: ${this.receivedBytes}/${this.receivedMetadata.fileSize} (${percentage.toFixed(1)}%)`);
 
                 this.currentTransfer = {
                     fileName: this.receivedMetadata.fileName,
                     fileSize: this.receivedMetadata.fileSize,
                     bytesTransferred: this.receivedBytes,
-                    percentage: (this.receivedBytes / this.receivedMetadata.fileSize) * 100,
+                    percentage: percentage,
                     status: 'transferring'
                 };
                 this.updateProgress(this.currentTransfer);
+            } else {
+                console.warn('⚠️ Received chunk but no metadata yet!');
             }
         }
     }
 
+    private handleControlMessage(message: any) {
+        if (message.type === 'metadata') {
+            console.log('📄 Receiving file metadata:', message.fileName, `(${message.fileSize} bytes)`);
+            this.receivedMetadata = {
+                fileName: message.fileName,
+                fileSize: message.fileSize
+            };
+            this.receivedChunks = [];
+            this.receivedBytes = 0;
+
+            this.currentTransfer = {
+                fileName: message.fileName,
+                fileSize: message.fileSize,
+                bytesTransferred: 0,
+                percentage: 0,
+                status: 'transferring'
+            };
+            this.updateProgress(this.currentTransfer);
+            console.log('✅ Ready to receive chunks');
+        } else if (message.type === 'complete') {
+            console.log('🏁 Received completion signal, saving file...');
+            this.saveReceivedFile();
+        } else if (message.type === 'cancel') {
+            if (this.currentTransfer) {
+                this.currentTransfer = {
+                    ...this.currentTransfer,
+                    status: 'cancelled'
+                };
+                this.updateProgress(this.currentTransfer);
+            }
+            this.receivedChunks = [];
+            this.receivedMetadata = null;
+            this.receivedBytes = 0;
+        }
+    }
+
     private async saveReceivedFile() {
+        console.log('💾 saveReceivedFile called');
+        
         if (!this.receivedMetadata || this.receivedChunks.length === 0) {
+            console.error('❌ Cannot save: missing metadata or chunks', {
+                hasMetadata: !!this.receivedMetadata,
+                chunksCount: this.receivedChunks.length
+            });
             return;
         }
 
         try {
             // Combine chunks
             const totalSize = this.receivedChunks.reduce((sum, chunk) => sum + chunk.length, 0);
+            console.log(`🔧 Combining ${this.receivedChunks.length} chunks (${totalSize} bytes)`);
+            
             const fileBuffer = new Uint8Array(totalSize);
             let offset = 0;
             for (const chunk of this.receivedChunks) {
@@ -260,21 +333,28 @@ export class WebRTCFileTransfer {
                 offset += chunk.length;
             }
 
+            console.log('📤 Calling IPC to save file:', this.receivedMetadata.fileName);
+            
             // Save file using Electron API
-            await window.electronAPI.saveReceivedFile(
+            const savedPath = await window.electronAPI.saveReceivedFile(
                 this.receivedMetadata.fileName,
                 fileBuffer
             );
+            
+            console.log('✅ File saved successfully:', savedPath);
 
             if (this.currentTransfer) {
                 this.currentTransfer = {
                     ...this.currentTransfer,
                     status: 'completed',
-                    percentage: 100
+                    percentage: 100,
+                    savedPath: savedPath
                 };
+                console.log('📊 Updating progress to completed with path:', savedPath);
                 this.updateProgress(this.currentTransfer);
             }
         } catch (error: any) {
+            console.error('❌ Error saving file:', error);
             if (this.currentTransfer) {
                 this.currentTransfer = {
                     ...this.currentTransfer,

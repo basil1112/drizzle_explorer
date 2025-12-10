@@ -23,7 +23,8 @@ interface ElectronAPI {
   getProfile: () => Promise<Profile>;
   updateProfile: (name: string) => Promise<Profile>;
   regenerateUUID: () => Promise<Profile>;
-  readFileForTransfer: (path: string) => Promise<ArrayBuffer>;
+  getFileInfo: (path: string) => Promise<{fileName: string; fileSize: number}>;
+  readFileChunk: (path: string, offset: number, length: number) => Promise<ArrayBuffer>;
   saveReceivedFile: (fileName: string, data: Uint8Array) => Promise<string>;
 }
 
