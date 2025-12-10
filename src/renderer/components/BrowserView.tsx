@@ -479,6 +479,23 @@ const BrowserView: React.FC<BrowserViewProps> = ({
     ];
   };
 
+  const handleAddToTransferQueue = () => {
+    if (selectedFile && !selectedFile.isDirectory) {
+      // Store the file path in localStorage for the transfer view to pick up
+      const transferQueue = JSON.parse(localStorage.getItem('transferQueue') || '[]');
+      if (!transferQueue.includes(selectedFile.path)) {
+        transferQueue.push(selectedFile.path);
+        localStorage.setItem('transferQueue', JSON.stringify(transferQueue));
+        setOperationMessage(`Added ${selectedFile.name} to transfer queue`);
+        setIsOperating(true);
+        setTimeout(() => {
+          setIsOperating(false);
+          setOperationMessage('');
+        }, 1500);
+      }
+    }
+  };
+
   const menuItems: MenuItem[] = selectedFile ? [
     {
       label: 'Open',
@@ -500,6 +517,15 @@ const BrowserView: React.FC<BrowserViewProps> = ({
       icon: 'pi pi-fw pi-clone',
       command: handlePaste,
       disabled: !hasCopied
+    },
+    {
+      separator: true
+    },
+    {
+      label: 'Add to Transfer Queue',
+      icon: 'pi pi-fw pi-send',
+      command: handleAddToTransferQueue,
+      disabled: selectedFile?.isDirectory
     },
     ...getVideoOperationsMenu(),
     ...getImageOperationsMenu(),

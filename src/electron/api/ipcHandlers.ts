@@ -1,8 +1,11 @@
-import { ipcMain } from 'electron';
+import { ipcMain, dialog, app } from 'electron';
 import { FileSystemController } from '../controllers/FileSystemController';
 import { FileOperationsController } from '../controllers/FileOperationsController';
 import { VideoOperationsController } from '../controllers/VideoOperationsController';
 import { ImageOperationsController } from '../controllers/ImageOperationsController';
+import { getProfile, updateProfile, regenerateUUID } from '../database/db';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 
 const fileSystemController = new FileSystemController();
 const fileOperationsController = new FileOperationsController();
@@ -92,5 +95,51 @@ export function registerFileSystemHandlers() {
 
   ipcMain.handle('compress-image', async (event, filePath: string) => {
     return await imageOperationsController.compressImage(filePath);
+  });
+
+  // Profile operations
+  ipcMain.handle('get-profile', async () => {
+    return getProfile();
+  });
+
+  ipcMain.handle('update-profile', async (event, name: string) => {
+    return updateProfile(name);
+  });
+
+  ipcMain.handle('regenerate-uuid', async () => {
+    return regenerateUUID();
+  });
+
+  // File transfer operations
+  ipcMain.handle('read-file-for-transfer', async (event, filePath: string) => {
+    try {
+      const buffer = await fs.readFile(filePath);
+      return buffer;
+    } catch (error: any) {
+      throw new Error(`Failed to read file: ${error.message}`);
+    }
+  });
+
+  ipcMain.handle('save-received-file', async (event, fileName: string, data: Uint8Array) => {
+    try {
+      const downloadsPath = app.getPath('downloads');
+      const savePath = path.join(downloadsPath, fileName);
+      
+      // Check if file exists and create unique name if needed
+      let finalPath = savePath;
+      let counter = 1;
+      const ext = path.extname(fileName);
+      const baseName = path.basename(fileName, ext);
+      
+      while (await fs.access(finalPath).then(() => true).catch(() => false)) {
+        finalPath = path.join(downloadsPath, `${baseName} (${counter})${ext}`);
+        counter++;
+      }
+      
+      await fs.writeFile(finalPath, Buffer.from(data));
+      return finalPath;
+    } catch (error: any) {
+      throw new Error(`Failed to save file: ${error.message}`);
+    }
   });
 }

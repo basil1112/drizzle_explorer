@@ -4,7 +4,7 @@ import { Button } from 'primereact/button';
 interface TabState {
     id: number;
     title: string;
-    view: 'home' | 'browser';
+    view: 'home' | 'browser' | 'settings' | 'transfer';
     path: string;
     drive: string;
 }

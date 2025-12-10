@@ -20,6 +20,19 @@ interface ElectronAPI {
   convertImage: (path: string, targetFormat: string) => Promise<boolean>;
   sharpenImage: (path: string) => Promise<boolean>;
   compressImage: (path: string) => Promise<boolean>;
+  getProfile: () => Promise<Profile>;
+  updateProfile: (name: string) => Promise<Profile>;
+  regenerateUUID: () => Promise<Profile>;
+  readFileForTransfer: (path: string) => Promise<ArrayBuffer>;
+  saveReceivedFile: (fileName: string, data: Uint8Array) => Promise<string>;
+}
+
+export interface Profile {
+  id: number;
+  uuid: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 declare global {

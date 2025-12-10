@@ -1,6 +1,7 @@
 import { app, BrowserWindow, Menu } from 'electron';
 import * as path from 'path';
 import { registerFileSystemHandlers } from './api/ipcHandlers';
+import { initDatabase, closeDatabase } from './database/db';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -29,6 +30,9 @@ app.whenReady().then(() => {
   // Remove default menu
   Menu.setApplicationMenu(null);
   
+  // Initialize database
+  initDatabase();
+  
   // Register IPC handlers
   registerFileSystemHandlers();
   
@@ -43,6 +47,11 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
+    closeDatabase();
     app.quit();
   }
+});
+
+app.on('before-quit', () => {
+  closeDatabase();
 });

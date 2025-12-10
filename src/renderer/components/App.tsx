@@ -6,6 +6,8 @@ import BrowserView from './BrowserView';
 import TopBar from './TopBar';
 import BreadcrumbBar from './BreadcrumbBar';
 import PreviewPanel from './PreviewPanel';
+import SettingsView from './SettingsView';
+import TransferView from './TransferView';
 
 interface DriveEntry {
     path: string;
@@ -22,7 +24,7 @@ interface FileEntry {
     type: 'file' | 'folder';
 }
 
-type ViewType = 'home' | 'browser';
+type ViewType = 'home' | 'browser' | 'settings' | 'transfer';
 
 interface TabState {
     id: number;
@@ -215,6 +217,24 @@ const App: React.FC = () => {
         }
     };
 
+    const handleSettingsClick = () => {
+        const currentTab = tabs[activeTabIndex];
+        updateTab(currentTab.id, {
+            view: 'settings',
+            title: 'Settings',
+            selectedFile: null
+        });
+    };
+
+    const handleTransferClick = () => {
+        const currentTab = tabs[activeTabIndex];
+        updateTab(currentTab.id, {
+            view: 'transfer',
+            title: 'Transfer',
+            selectedFile: null
+        });
+    };
+
     const handleFileSelect = (file: FileEntry) => {
         const currentTab = tabs[activeTabIndex];
         updateTab(currentTab.id, {
@@ -261,6 +281,8 @@ const App: React.FC = () => {
                                 onHomeClick={switchToHomeView}
                                 onDriveClick={selectDrive}
                                 onQuickAccessClick={openQuickAccessFolder}
+                                onSettingsClick={handleSettingsClick}
+                                onTransferClick={handleTransferClick}
                             />
                         </div>
                     </SplitterPanel>
@@ -275,6 +297,10 @@ const App: React.FC = () => {
                                     onDriveClick={selectDrive}
                                     onQuickAccessClick={openQuickAccessFolder}
                                 />
+                            ) : currentTab.view === 'settings' ? (
+                                <SettingsView darkMode={darkMode} />
+                            ) : currentTab.view === 'transfer' ? (
+                                <TransferView darkMode={darkMode} />
                             ) : (
                                 <BrowserView
                                     currentPath={currentTab.path}
@@ -291,7 +317,7 @@ const App: React.FC = () => {
                     </SplitterPanel>
 
                     {/* Preview Panel */}
-                    <SplitterPanel  size={25} minSize={15} style={{ overflow: 'hidden',display: currentTab.selectedFile ? 'block' : 'none' }}>
+                    <SplitterPanel  size={25} minSize={15} style={{ overflow: 'hidden',display: (currentTab.selectedFile && currentTab.view === 'browser') ? 'block' : 'none' }}>
                         <PreviewPanel
                             selectedFile={currentTab.selectedFile}
                             darkMode={darkMode}

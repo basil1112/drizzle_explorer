@@ -21,4 +21,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   convertImage: (path: string, targetFormat: string): Promise<boolean> => ipcRenderer.invoke('convert-image', path, targetFormat),
   sharpenImage: (path: string): Promise<boolean> => ipcRenderer.invoke('sharpen-image', path),
   compressImage: (path: string): Promise<boolean> => ipcRenderer.invoke('compress-image', path),
+  getProfile: (): Promise<any> => ipcRenderer.invoke('get-profile'),
+  updateProfile: (name: string): Promise<any> => ipcRenderer.invoke('update-profile', name),
+  regenerateUUID: (): Promise<any> => ipcRenderer.invoke('regenerate-uuid'),
+  readFileForTransfer: (path: string): Promise<ArrayBuffer> => ipcRenderer.invoke('read-file-for-transfer', path),
+  saveReceivedFile: (fileName: string, data: Uint8Array): Promise<string> => ipcRenderer.invoke('save-received-file', fileName, data),
 });

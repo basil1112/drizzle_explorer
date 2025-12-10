@@ -3,7 +3,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
   entry: './src/renderer/index.tsx',
-  target: 'electron-renderer',
+  target: 'web', // Changed from 'electron-renderer' to avoid auto-externalizing Node modules
   output: {
     path: path.resolve(__dirname, 'dist/renderer'),
     filename: 'bundle.js',
@@ -42,11 +42,22 @@ module.exports = {
   },
   resolve: {
     extensions: ['.tsx', '.ts', '.js'],
+    fallback: {
+      buffer: require.resolve('buffer/'),
+      stream: require.resolve('stream-browserify'),
+      util: require.resolve('util/'),
+      crypto: require.resolve('crypto-browserify'),
+      process: require.resolve('process/browser'),
+    },
   },
   plugins: [
     new HtmlWebpackPlugin({
       template: './src/renderer/index.html',
       filename: '../../index.html',
+    }),
+    new (require('webpack')).ProvidePlugin({
+      process: 'process/browser',
+      Buffer: ['buffer', 'Buffer'],
     }),
   ],
 };
