@@ -11,6 +11,12 @@ export interface Profile {
     updatedAt: string;
 }
 
+export interface TransferQueueItem {
+    id: number;
+    filePath: string;
+    addedAt: string;
+}
+
 let db: Database.Database | null = null;
 
 export function initDatabase(): Database.Database {
@@ -32,6 +38,15 @@ export function initDatabase(): Database.Database {
             name TEXT NOT NULL,
             createdAt TEXT NOT NULL,
             updatedAt TEXT NOT NULL
+        )
+    `);
+
+    // Create transfer queue table
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS transfer_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filePath TEXT NOT NULL,
+            addedAt TEXT NOT NULL
         )
     `);
 
@@ -89,6 +104,41 @@ export function updateProfile(name: string): Profile {
     
     return db.prepare('SELECT * FROM profiles WHERE id = ?').get(result.lastInsertRowid) as Profile;
 }
+
+// Transfer queue operations
+export function getTransferQueue(): TransferQueueItem[] {
+    const db = getDatabase();
+    return db.prepare('SELECT * FROM transfer_queue ORDER BY addedAt ASC').all() as TransferQueueItem[];
+}
+
+export function addToTransferQueue(filePath: string): TransferQueueItem {
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    
+    // Check if already in queue
+    const existing = db.prepare('SELECT * FROM transfer_queue WHERE filePath = ?').get(filePath) as TransferQueueItem | undefined;
+    if (existing) {
+        return existing;
+    }
+    
+    const result = db.prepare(`
+        INSERT INTO transfer_queue (filePath, addedAt)
+        VALUES (?, ?)
+    `).run(filePath, now);
+    
+    return db.prepare('SELECT * FROM transfer_queue WHERE id = ?').get(result.lastInsertRowid) as TransferQueueItem;
+}
+
+export function removeFromTransferQueue(filePath: string): void {
+    const db = getDatabase();
+    db.prepare('DELETE FROM transfer_queue WHERE filePath = ?').run(filePath);
+}
+
+export function clearTransferQueue(): void {
+    const db = getDatabase();
+    db.prepare('DELETE FROM transfer_queue').run();
+}
+
 
 export function regenerateUUID(): Profile {
     const db = getDatabase();

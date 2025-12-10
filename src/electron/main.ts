@@ -16,7 +16,7 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, '../../index.html'));
+  mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
   
   // Open DevTools in development
  mainWindow.webContents.openDevTools();

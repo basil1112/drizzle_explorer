@@ -7,6 +7,7 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, 'dist/renderer'),
     filename: 'bundle.js',
+    publicPath: './',
   },
   module: {
     rules: [
@@ -53,7 +54,7 @@ module.exports = {
   plugins: [
     new HtmlWebpackPlugin({
       template: './src/renderer/index.html',
-      filename: '../../index.html',
+      filename: 'index.html',
     }),
     new (require('webpack')).ProvidePlugin({
       process: 'process/browser',

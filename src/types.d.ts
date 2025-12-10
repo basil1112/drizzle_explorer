@@ -23,6 +23,10 @@ interface ElectronAPI {
   getProfile: () => Promise<Profile>;
   updateProfile: (name: string) => Promise<Profile>;
   regenerateUUID: () => Promise<Profile>;
+  getTransferQueue: () => Promise<TransferQueueItem[]>;
+  addToTransferQueue: (filePath: string) => Promise<TransferQueueItem>;
+  removeFromTransferQueue: (filePath: string) => Promise<boolean>;
+  clearTransferQueue: () => Promise<boolean>;
   getFileInfo: (path: string) => Promise<{fileName: string; fileSize: number}>;
   readFileChunk: (path: string, offset: number, length: number) => Promise<ArrayBuffer>;
   saveReceivedFile: (fileName: string, data: Uint8Array) => Promise<string>;
@@ -34,6 +38,12 @@ export interface Profile {
   name: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TransferQueueItem {
+  id: number;
+  filePath: string;
+  addedAt: string;
 }
 
 declare global {

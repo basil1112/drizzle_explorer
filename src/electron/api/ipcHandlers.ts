@@ -3,7 +3,7 @@ import { FileSystemController } from '../controllers/FileSystemController';
 import { FileOperationsController } from '../controllers/FileOperationsController';
 import { VideoOperationsController } from '../controllers/VideoOperationsController';
 import { ImageOperationsController } from '../controllers/ImageOperationsController';
-import { getProfile, updateProfile, regenerateUUID } from '../database/db';
+import { getProfile, updateProfile, regenerateUUID, getTransferQueue, addToTransferQueue, removeFromTransferQueue, clearTransferQueue } from '../database/db';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -108,6 +108,25 @@ export function registerFileSystemHandlers() {
 
   ipcMain.handle('regenerate-uuid', async () => {
     return regenerateUUID();
+  });
+
+  // Transfer queue operations
+  ipcMain.handle('get-transfer-queue', async () => {
+    return getTransferQueue();
+  });
+
+  ipcMain.handle('add-to-transfer-queue', async (event, filePath: string) => {
+    return addToTransferQueue(filePath);
+  });
+
+  ipcMain.handle('remove-from-transfer-queue', async (event, filePath: string) => {
+    removeFromTransferQueue(filePath);
+    return true;
+  });
+
+  ipcMain.handle('clear-transfer-queue', async () => {
+    clearTransferQueue();
+    return true;
   });
 
   // File transfer operations

@@ -41,20 +41,31 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
         };
     }, []);
 
-    const loadTransferQueue = () => {
-        const queue = JSON.parse(localStorage.getItem('transferQueue') || '[]');
-        setTransferQueue(queue);
+    const loadTransferQueue = async () => {
+        try {
+            const queue = await window.electronAPI.getTransferQueue();
+            setTransferQueue(queue.map(item => item.filePath));
+        } catch (error) {
+            console.error('Error loading transfer queue:', error);
+        }
     };
 
-    const removeFromQueue = (filePath: string) => {
-        const queue = transferQueue.filter(f => f !== filePath);
-        localStorage.setItem('transferQueue', JSON.stringify(queue));
-        setTransferQueue(queue);
+    const removeFromQueue = async (filePath: string) => {
+        try {
+            await window.electronAPI.removeFromTransferQueue(filePath);
+            await loadTransferQueue();
+        } catch (error) {
+            console.error('Error removing from queue:', error);
+        }
     };
 
-    const clearQueue = () => {
-        localStorage.setItem('transferQueue', JSON.stringify([]));
-        setTransferQueue([]);
+    const clearQueue = async () => {
+        try {
+            await window.electronAPI.clearTransferQueue();
+            await loadTransferQueue();
+        } catch (error) {
+            console.error('Error clearing queue:', error);
+        }
     };
 
     const loadProfile = async () => {

@@ -479,19 +479,18 @@ const BrowserView: React.FC<BrowserViewProps> = ({
     ];
   };
 
-  const handleAddToTransferQueue = () => {
+  const handleAddToTransferQueue = async () => {
     if (selectedFile && !selectedFile.isDirectory) {
-      // Store the file path in localStorage for the transfer view to pick up
-      const transferQueue = JSON.parse(localStorage.getItem('transferQueue') || '[]');
-      if (!transferQueue.includes(selectedFile.path)) {
-        transferQueue.push(selectedFile.path);
-        localStorage.setItem('transferQueue', JSON.stringify(transferQueue));
+      try {
+        await window.electronAPI.addToTransferQueue(selectedFile.path);
         setOperationMessage(`Added ${selectedFile.name} to transfer queue`);
         setIsOperating(true);
         setTimeout(() => {
           setIsOperating(false);
           setOperationMessage('');
         }, 1500);
+      } catch (error) {
+        console.error('Error adding to transfer queue:', error);
       }
     }
   };
