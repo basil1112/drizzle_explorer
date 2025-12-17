@@ -36,4 +36,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   writeChunk: (streamId: string, chunk: Uint8Array): Promise<void> => ipcRenderer.invoke('write-chunk', streamId, chunk),
   finalizeWriteStream: (streamId: string): Promise<void> => ipcRenderer.invoke('finalize-write-stream', streamId),
   cancelWriteStream: (streamId: string): Promise<void> => ipcRenderer.invoke('cancel-write-stream', streamId),
+  // Settings
+  getSetting: (key: string): Promise<string | undefined> => ipcRenderer.invoke('get-setting', key),
+  setSetting: (key: string, value: string): Promise<boolean> => ipcRenderer.invoke('set-setting', key, value),
+  getAllSettings: (): Promise<Record<string, string>> => ipcRenderer.invoke('get-all-settings'),
+  // Compression
+  compress7zip: (sourcePath: string, outputPath?: string): Promise<{success: boolean; outputPath?: string; error?: string}> => ipcRenderer.invoke('compress-7zip', sourcePath, outputPath),
+  compressNative: (sourcePath: string, outputPath?: string): Promise<{success: boolean; outputPath?: string; error?: string}> => ipcRenderer.invoke('compress-native', sourcePath, outputPath),
+  extract7zip: (archivePath: string, outputDir?: string): Promise<{success: boolean; outputPath?: string; error?: string}> => ipcRenderer.invoke('extract-7zip', archivePath, outputDir),
+  extractNative: (archivePath: string, outputDir?: string): Promise<{success: boolean; outputPath?: string; error?: string}> => ipcRenderer.invoke('extract-native', archivePath, outputDir),
+  isCompressedFile: (filePath: string): Promise<boolean> => ipcRenderer.invoke('is-compressed-file', filePath),
 });

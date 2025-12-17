@@ -17,6 +17,11 @@ export interface TransferQueueItem {
     addedAt: string;
 }
 
+export interface Setting {
+    key: string;
+    value: string;
+}
+
 let db: Database.Database | null = null;
 
 export function initDatabase(): Database.Database {
@@ -49,6 +54,20 @@ export function initDatabase(): Database.Database {
             addedAt TEXT NOT NULL
         )
     `);
+
+    // Create settings table
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    `);
+
+    // Initialize default settings if they don't exist
+    const showThumbnails = db.prepare('SELECT value FROM settings WHERE key = ?').get('showThumbnails');
+    if (!showThumbnails) {
+        db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('showThumbnails', 'false');
+    }
 
     // Create an initial profile if none exists
     const profileCount = db.prepare('SELECT COUNT(*) as count FROM profiles').get() as { count: number };
@@ -153,4 +172,26 @@ export function regenerateUUID(): Profile {
     }
     
     throw new Error('No profile found');
+}
+
+// Settings operations
+export function getSetting(key: string): string | undefined {
+    const db = getDatabase();
+    const result = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as Setting | undefined;
+    return result?.value;
+}
+
+export function setSetting(key: string, value: string): void {
+    const db = getDatabase();
+    db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run(key, value);
+}
+
+export function getAllSettings(): Record<string, string> {
+    const db = getDatabase();
+    const rows = db.prepare('SELECT key, value FROM settings').all() as Setting[];
+    const settings: Record<string, string> = {};
+    rows.forEach(row => {
+        settings[row.key] = row.value;
+    });
+    return settings;
 }

@@ -3,6 +3,7 @@ import { Card } from 'primereact/card';
 import { InputText } from 'primereact/inputtext';
 import { Button } from 'primereact/button';
 import { Message } from 'primereact/message';
+import { InputSwitch } from 'primereact/inputswitch';
 import { Profile } from '../../types';
 
 interface SettingsViewProps {
@@ -12,12 +13,14 @@ interface SettingsViewProps {
 const SettingsView: React.FC<SettingsViewProps> = ({ darkMode }) => {
     const [profile, setProfile] = useState<Profile | null>(null);
     const [profileName, setProfileName] = useState('');
+    const [showThumbnails, setShowThumbnails] = useState(false);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     useEffect(() => {
         loadProfile();
+        loadSettings();
     }, []);
 
     const loadProfile = async () => {
@@ -31,6 +34,15 @@ const SettingsView: React.FC<SettingsViewProps> = ({ darkMode }) => {
             showMessage('error', 'Failed to load profile');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadSettings = async () => {
+        try {
+            const thumbnailsSetting = await window.electronAPI.getSetting('showThumbnails');
+            setShowThumbnails(thumbnailsSetting === 'true');
+        } catch (error) {
+            console.error('Error loading settings:', error);
         }
     };
 
@@ -75,6 +87,19 @@ const SettingsView: React.FC<SettingsViewProps> = ({ darkMode }) => {
         if (profile?.uuid) {
             navigator.clipboard.writeText(profile.uuid);
             showMessage('success', 'UUID copied to clipboard');
+        }
+    };
+
+    const handleThumbnailsToggle = async (value: boolean) => {
+        try {
+            setShowThumbnails(value);
+            await window.electronAPI.setSetting('showThumbnails', value.toString());
+            showMessage('success', `Thumbnails ${value ? 'enabled' : 'disabled'}`);
+        } catch (error) {
+            console.error('Error saving thumbnails setting:', error);
+            showMessage('error', 'Failed to save setting');
+            // Revert the toggle on error
+            setShowThumbnails(!value);
         }
     };
 
@@ -196,6 +221,46 @@ const SettingsView: React.FC<SettingsViewProps> = ({ darkMode }) => {
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                        </div>
+                    </div>
+                </Card>
+
+                <Card className={`mb-4 ${darkMode ? 'bg-[#2a2a2a]' : 'bg-white'}`}>
+                    <div className="space-y-6">
+                        <div>
+                            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                                Display Settings
+                            </h3>
+
+                            <div className="space-y-4">
+                                {/* Show Thumbnails Toggle */}
+                                <div className={`p-4 rounded-lg border ${darkMode ? 'border-gray-700 bg-[#323232]' : 'border-gray-200 bg-gray-50'}`}>
+                                    <div className="flex items-start justify-between mb-3">
+                                        <div className="flex-1">
+                                            <label 
+                                                htmlFor="showThumbnails" 
+                                                className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}
+                                            >
+                                                Show Thumbnails
+                                            </label>
+                                            <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                                Display image and video thumbnails in file browser
+                                            </p>
+                                        </div>
+                                        <InputSwitch
+                                            id="showThumbnails"
+                                            checked={showThumbnails}
+                                            onChange={(e) => handleThumbnailsToggle(e.value)}
+                                            className="ml-4"
+                                        />
+                                    </div>
+                                    <Message 
+                                        severity="warn" 
+                                        text="Note: Displaying thumbnails will use more memory when browsing files with many images or videos."
+                                        className="text-xs p-2"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>

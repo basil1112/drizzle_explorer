@@ -37,6 +37,7 @@ interface TabState {
     loading: boolean;
     error: string;
     selectedFile: FileEntry | null;
+    viewMode: 'list' | 'grid';
 }
 
 const App: React.FC = () => {
@@ -52,7 +53,8 @@ const App: React.FC = () => {
             files: [],
             loading: false,
             error: '',
-            selectedFile: null
+            selectedFile: null,
+            viewMode: 'list'
         }
     ]);
     const [activeTabIndex, setActiveTabIndex] = useState<number>(0);
@@ -102,7 +104,8 @@ const App: React.FC = () => {
             files: [],
             loading: false,
             error: '',
-            selectedFile: null
+            selectedFile: null,
+            viewMode: 'list'
         };
         setTabs([...tabs, newTab]);
         setActiveTabIndex(tabs.length);
@@ -240,6 +243,13 @@ const App: React.FC = () => {
         });
     };
 
+    const handleViewModeChange = (mode: 'list' | 'grid') => {
+        const currentTab = tabs[activeTabIndex];
+        updateTab(currentTab.id, {
+            viewMode: mode
+        });
+    };
+
     const currentTab = tabs[activeTabIndex];
 
     return (
@@ -262,6 +272,8 @@ const App: React.FC = () => {
                     darkMode={darkMode}
                     onBack={goBack}
                     onPathClick={loadDirectory}
+                    viewMode={currentTab.viewMode}
+                    onViewModeChange={handleViewModeChange}
                 />
             )}
 
@@ -307,6 +319,7 @@ const App: React.FC = () => {
                                     onBack={goBack}
                                     onDirectoryClick={loadDirectory}
                                     onFileSelect={handleFileSelect}
+                                    viewMode={currentTab.viewMode}
                                 />
                             )}
                         </div>

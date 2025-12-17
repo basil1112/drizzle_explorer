@@ -1,13 +1,16 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Button } from 'primereact/button';
 import { BreadCrumb } from 'primereact/breadcrumb';
 import { MenuItem } from 'primereact/menuitem';
+import { Menu } from 'primereact/menu';
 
 interface BreadcrumbBarProps {
     currentPath: string;
     darkMode: boolean;
     onBack: () => void;
     onPathClick?: (path: string) => void;
+    viewMode?: 'list' | 'grid';
+    onViewModeChange?: (mode: 'list' | 'grid') => void;
 }
 
 const BreadcrumbBar: React.FC<BreadcrumbBarProps> = ({
@@ -15,7 +18,10 @@ const BreadcrumbBar: React.FC<BreadcrumbBarProps> = ({
     darkMode,
     onBack,
     onPathClick,
+    viewMode = 'list',
+    onViewModeChange,
 }) => {
+    const menuRef = useRef<Menu>(null);
     // Parse the path into breadcrumb items
     const getBreadcrumbItems = (): MenuItem[] => {
         if (!currentPath) return [];
@@ -46,6 +52,27 @@ const BreadcrumbBar: React.FC<BreadcrumbBarProps> = ({
             }
         }
     };
+
+    const viewMenuItems: MenuItem[] = [
+        {
+            label: 'List View',
+            icon: 'pi pi-list',
+            command: () => {
+                if (onViewModeChange) {
+                    onViewModeChange('list');
+                }
+            }
+        },
+        {
+            label: 'Grid View',
+            icon: 'pi pi-th-large',
+            command: () => {
+                if (onViewModeChange) {
+                    onViewModeChange('grid');
+                }
+            }
+        }
+    ];
 
     return (
         <div className={`flex items-stretch gap-3 px-4 py-2 border-b ${darkMode ? 'bg-[#252526] border-[#3e3e42]' : 'bg-gray-50 border-gray-300'
@@ -81,6 +108,20 @@ const BreadcrumbBar: React.FC<BreadcrumbBarProps> = ({
                     severity="secondary"
                     outlined
                     tooltip='copy path'
+                    tooltipOptions={{ position: 'top' }}
+                    size="small"
+                />
+            </div>
+
+            <div className={`flex items-center rounded border px-2 ${darkMode ? 'bg-[#2d2d30] border-[#3e3e42]' : 'bg-white border-gray-300'
+                }`}>
+                <Menu model={viewMenuItems} popup ref={menuRef} />
+                <Button
+                    icon={viewMode === 'list' ? 'pi pi-list' : 'pi pi-th-large'}
+                    onClick={(e) => menuRef.current?.toggle(e)}
+                    severity="secondary"
+                    outlined
+                    tooltip='View Layout'
                     tooltipOptions={{ position: 'top' }}
                     size="small"
                 />

@@ -3,7 +3,8 @@ import { FileSystemController } from '../controllers/FileSystemController';
 import { FileOperationsController } from '../controllers/FileOperationsController';
 import { VideoOperationsController } from '../controllers/VideoOperationsController';
 import { ImageOperationsController } from '../controllers/ImageOperationsController';
-import { getProfile, updateProfile, regenerateUUID, getTransferQueue, addToTransferQueue, removeFromTransferQueue, clearTransferQueue } from '../database/db';
+import { CompressionController } from '../controllers/CompressionController';
+import { getProfile, updateProfile, regenerateUUID, getTransferQueue, addToTransferQueue, removeFromTransferQueue, clearTransferQueue, getSetting, setSetting, getAllSettings } from '../database/db';
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
@@ -12,6 +13,7 @@ const fileSystemController = new FileSystemController();
 const fileOperationsController = new FileOperationsController();
 const videoOperationsController = new VideoOperationsController();
 const imageOperationsController = new ImageOperationsController();
+const compressionController = new CompressionController();
 
 /**
  * Register all IPC handlers for file system operations
@@ -128,6 +130,65 @@ export function registerFileSystemHandlers() {
   ipcMain.handle('clear-transfer-queue', async () => {
     clearTransferQueue();
     return true;
+  });
+
+  // Settings operations
+  ipcMain.handle('get-setting', async (event, key: string) => {
+    return getSetting(key);
+  });
+
+  ipcMain.handle('set-setting', async (event, key: string, value: string) => {
+    setSetting(key, value);
+    return true;
+  });
+
+  ipcMain.handle('get-all-settings', async () => {
+    return getAllSettings();
+  });
+
+  // Compression operations
+  ipcMain.handle('compress-7zip', async (event, sourcePath: string, outputPath?: string) => {
+    try {
+      const result = await compressionController.compress7zip(sourcePath, outputPath);
+      return { success: true, outputPath: result };
+    } catch (error: any) {
+      console.error('Compress 7zip error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('compress-native', async (event, sourcePath: string, outputPath?: string) => {
+    try {
+      const result = await compressionController.compressNative(sourcePath, outputPath);
+      return { success: true, outputPath: result };
+    } catch (error: any) {
+      console.error('Compress native error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('extract-7zip', async (event, archivePath: string, outputDir?: string) => {
+    try {
+      const result = await compressionController.extract7zip(archivePath, outputDir);
+      return { success: true, outputPath: result };
+    } catch (error: any) {
+      console.error('Extract 7zip error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('extract-native', async (event, archivePath: string, outputDir?: string) => {
+    try {
+      const result = await compressionController.extractNative(archivePath, outputDir);
+      return { success: true, outputPath: result };
+    } catch (error: any) {
+      console.error('Extract native error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('is-compressed-file', async (event, filePath: string) => {
+    return compressionController.isCompressedFile(filePath);
   });
 
   // File transfer operations

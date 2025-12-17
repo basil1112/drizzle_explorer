@@ -31,6 +31,7 @@ interface BrowserViewProps {
   onBack: () => void;
   onDirectoryClick: (path: string) => void;
   onFileSelect?: (file: FileEntry) => void;
+  viewMode?: 'list' | 'grid';
 }
 
 const BrowserView: React.FC<BrowserViewProps> = ({
@@ -42,6 +43,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   onBack,
   onDirectoryClick,
   onFileSelect,
+  viewMode = 'list',
 }) => {
   const cm = useRef<ContextMenu>(null);
   const [selectedFile, setSelectedFile] = React.useState<FileEntry | null>(null);
@@ -61,14 +63,44 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   const [imageFormat, setImageFormat] = React.useState<string>('png');
   const [trimRange, setTrimRange] = React.useState<[number, number]>([0, 100]);
   const [videoDuration, setVideoDuration] = React.useState<number>(100);
+  const [showThumbnails, setShowThumbnails] = React.useState<boolean>(false);
+  const [thumbnailCache, setThumbnailCache] = React.useState<Map<string, string>>(new Map());
 
   React.useEffect(() => {
     checkCopiedState();
+    loadThumbnailSetting();
   }, []);
+
+  const loadThumbnailSetting = async () => {
+    try {
+      const setting = await window.electronAPI.getSetting('showThumbnails');
+      setShowThumbnails(setting === 'true');
+    } catch (error) {
+      console.error('Error loading thumbnail setting:', error);
+    }
+  };
 
   const checkCopiedState = async () => {
     const copied = await window.electronAPI.hasCopiedPath();
     setHasCopied(copied);
+  };
+
+  const getThumbnailUrl = (file: FileEntry): string | null => {
+    if (!showThumbnails || file.isDirectory) return null;
+    
+    // Check cache first
+    if (thumbnailCache.has(file.path)) {
+      return thumbnailCache.get(file.path) || null;
+    }
+    
+    // For images and videos, create file URL
+    if (isImage(file.name) || isVideo(file.name)) {
+      // Convert file path to file:// URL - cross-platform
+      const fileUrl = `file:///${file.path.replace(/\\/g, '/')}`;
+      return fileUrl;
+    }
+    
+    return null;
   };
 
   const handleOpen = async () => {
@@ -479,6 +511,63 @@ const BrowserView: React.FC<BrowserViewProps> = ({
     ];
   };
 
+  const isCompressedFile = (fileName: string): boolean => {
+    const ext = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
+    return ['.zip', '.7z', '.rar', '.tar', '.gz', '.bz2', '.xz', '.tgz', '.tbz2'].includes(ext);
+  };
+
+  const getCompressionMenu = (): MenuItem[] => {
+    if (!selectedFile) return [];
+
+    if (isCompressedFile(selectedFile.name)) {
+      // Show extraction options for compressed files
+      return [
+        {
+          separator: true
+        },
+        {
+          label: 'Extract to Folder',
+          icon: 'pi pi-fw pi-folder-open',
+          items: [
+            {
+              label: '7zip',
+              icon: 'pi pi-fw pi-file-export',
+              command: handleExtract7zip
+            },
+            {
+              label: 'Native Method',
+              icon: 'pi pi-fw pi-file-export',
+              command: handleExtractNative
+            }
+          ]
+        }
+      ];
+    } else {
+      // Show compression options for regular files/folders
+      return [
+        {
+          separator: true
+        },
+        {
+          label: 'Compress',
+          icon: 'pi pi-fw pi-file-import',
+          items: [
+            {
+              label: '7zip-min',
+              icon: 'pi pi-fw pi-file-import',
+              command: handleCompress7zip
+            },
+            {
+              label: 'Native Method',
+              icon: 'pi pi-fw pi-file-import',
+              command: handleCompressNative
+            }
+          ]
+        }
+      ];
+    }
+  };
+
   const handleAddToTransferQueue = async () => {
     if (selectedFile && !selectedFile.isDirectory) {
       try {
@@ -491,6 +580,102 @@ const BrowserView: React.FC<BrowserViewProps> = ({
         }, 1500);
       } catch (error) {
         console.error('Error adding to transfer queue:', error);
+      }
+    }
+  };
+
+  const handleCompress7zip = async () => {
+    if (selectedFile) {
+      setIsOperating(true);
+      setOperationMessage(`Compressing ${selectedFile.name} with 7zip...`);
+      console.log('Compressing with 7zip:', selectedFile.path);
+      const result = await window.electronAPI.compress7zip(selectedFile.path);
+      console.log('Compress 7zip result:', result);
+      if (result.success) {
+        setOperationMessage('Compression complete!');
+        setTimeout(() => {
+          setIsOperating(false);
+          setOperationMessage('');
+          onDirectoryClick(currentPath);
+        }, 1000);
+      } else {
+        setOperationMessage(`Compression failed: ${result.error}`);
+        setTimeout(() => {
+          setIsOperating(false);
+          setOperationMessage('');
+        }, 3000);
+      }
+    }
+  };
+
+  const handleCompressNative = async () => {
+    if (selectedFile) {
+      setIsOperating(true);
+      setOperationMessage(`Compressing ${selectedFile.name} with native method...`);
+      console.log('Compressing with native method:', selectedFile.path);
+      const result = await window.electronAPI.compressNative(selectedFile.path);
+      console.log('Compress native result:', result);
+      if (result.success) {
+        setOperationMessage('Compression complete!');
+        setTimeout(() => {
+          setIsOperating(false);
+          setOperationMessage('');
+          onDirectoryClick(currentPath);
+        }, 1000);
+      } else {
+        setOperationMessage(`Compression failed: ${result.error}`);
+        setTimeout(() => {
+          setIsOperating(false);
+          setOperationMessage('');
+        }, 3000);
+      }
+    }
+  };
+
+  const handleExtract7zip = async () => {
+    if (selectedFile) {
+      setIsOperating(true);
+      setOperationMessage(`Extracting ${selectedFile.name} with 7zip...`);
+      console.log('Extracting with 7zip:', selectedFile.path);
+      const result = await window.electronAPI.extract7zip(selectedFile.path);
+      console.log('Extract 7zip result:', result);
+      if (result.success) {
+        setOperationMessage('Extraction complete!');
+        setTimeout(() => {
+          setIsOperating(false);
+          setOperationMessage('');
+          onDirectoryClick(currentPath);
+        }, 1000);
+      } else {
+        setOperationMessage(`Extraction failed: ${result.error}`);
+        setTimeout(() => {
+          setIsOperating(false);
+          setOperationMessage('');
+        }, 3000);
+      }
+    }
+  };
+
+  const handleExtractNative = async () => {
+    if (selectedFile) {
+      setIsOperating(true);
+      setOperationMessage(`Extracting ${selectedFile.name} with native method...`);
+      console.log('Extracting with native method:', selectedFile.path);
+      const result = await window.electronAPI.extractNative(selectedFile.path);
+      console.log('Extract native result:', result);
+      if (result.success) {
+        setOperationMessage('Extraction complete!');
+        setTimeout(() => {
+          setIsOperating(false);
+          setOperationMessage('');
+          onDirectoryClick(currentPath);
+        }, 1000);
+      } else {
+        setOperationMessage(`Extraction failed: ${result.error}`);
+        setTimeout(() => {
+          setIsOperating(false);
+          setOperationMessage('');
+        }, 3000);
       }
     }
   };
@@ -528,6 +713,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
     },
     ...getVideoOperationsMenu(),
     ...getImageOperationsMenu(),
+    ...getCompressionMenu(),
     {
       separator: true
     },
@@ -554,9 +740,15 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   };
 
   const nameBodyTemplate = (rowData: FileEntry) => {
+    const shouldShowThumbnail = showThumbnails && !rowData.isDirectory && (isImage(rowData.name) || isVideo(rowData.name));
+    
     return (
       <div className="flex items-center gap-2">
-        <i className={`${rowData.isDirectory ? 'pi pi-folder text-yellow-500' : 'pi pi-file text-blue-400'} text-xl`}></i>
+        {shouldShowThumbnail ? (
+          <ThumbnailImage file={rowData} className="w-8 h-8 object-cover rounded" />
+        ) : (
+          <i className={`${rowData.isDirectory ? 'pi pi-folder text-yellow-500' : 'pi pi-file text-blue-400'} text-xl`}></i>
+        )}
         <span>{rowData.name}</span>
       </div>
     );
@@ -570,8 +762,66 @@ const BrowserView: React.FC<BrowserViewProps> = ({
     return new Date(rowData.modified).toLocaleString();
   };
 
+  // Thumbnail component for images and videos
+  const ThumbnailImage: React.FC<{ file: FileEntry; className?: string }> = ({ file, className }) => {
+    const [thumbnailSrc, setThumbnailSrc] = React.useState<string | null>(null);
+    const [error, setError] = React.useState(false);
+    const videoRef = React.useRef<HTMLVideoElement>(null);
+
+    React.useEffect(() => {
+      if (!showThumbnails || file.isDirectory) return;
+
+      const fileUrl = getThumbnailUrl(file);
+      if (fileUrl) {
+        if (isImage(file.name)) {
+          setThumbnailSrc(fileUrl);
+        } else if (isVideo(file.name)) {
+          // For videos, we'll show a video element that captures first frame
+          setThumbnailSrc(fileUrl);
+        }
+      }
+    }, [file.path, showThumbnails]);
+
+    if (error || !thumbnailSrc) {
+      // Fallback to icon
+      return (
+        <i className={`${file.isDirectory ? 'pi pi-folder text-yellow-500' : 'pi pi-file text-blue-400'} ${className || 'text-5xl'}`}></i>
+      );
+    }
+
+    if (isImage(file.name)) {
+      return (
+        <img
+          src={thumbnailSrc}
+          alt={file.name}
+          className={className || 'w-16 h-16 object-cover rounded'}
+          onError={() => setError(true)}
+          loading="lazy"
+        />
+      );
+    }
+
+    if (isVideo(file.name)) {
+      return (
+        <video
+          ref={videoRef}
+          src={thumbnailSrc}
+          className={className || 'w-16 h-16 object-cover rounded'}
+          onError={() => setError(true)}
+          muted
+          playsInline
+          preload="metadata"
+        />
+      );
+    }
+
+    return (
+      <i className={`${file.isDirectory ? 'pi pi-folder text-yellow-500' : 'pi pi-file text-blue-400'} ${className || 'text-5xl'}`}></i>
+    );
+  };
+
   return (
-    <div className="p-6" onContextMenu={handleBackgroundContextMenu}>
+    <div className="p-2" onContextMenu={handleBackgroundContextMenu}>
       <ContextMenu model={menuItems} ref={cm} />
 
       {/* Delete Confirmation Dialog */}
@@ -829,7 +1079,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
         </div>
       </Dialog>
 
-      {/* File Table */}
+      {/* File Display - List or Grid */}
       <Card onContextMenu={handleBackgroundContextMenu}>
         {loading ? (
           <div className="flex flex-col items-center justify-center py-12">
@@ -848,6 +1098,63 @@ const BrowserView: React.FC<BrowserViewProps> = ({
           >
             <i className={`pi pi-inbox text-4xl mb-3 ${darkMode ? 'text-gray-500' : 'text-gray-400'}`}></i>
             <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Empty directory</p>
+          </div>
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 p-4">
+            {files.map((file) => {
+              const shouldShowThumbnail = showThumbnails && !file.isDirectory && (isImage(file.name) || isVideo(file.name));
+              
+              return (
+                <div
+                  key={file.path}
+                  className={`flex flex-col items-center p-3 rounded-lg cursor-pointer transition-colors ${
+                    darkMode 
+                      ? 'hover:bg-[#2d2d30] border border-[#3e3e42]' 
+                      : 'hover:bg-gray-100 border border-gray-200'
+                  }`}
+                  onClick={() => {
+                    if (file.isDirectory) {
+                      onDirectoryClick(file.path);
+                    } else {
+                      onFileSelect?.(file);
+                    }
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setSelectedFile(file);
+                    checkCopiedState();
+                    cm.current?.show(e as any);
+                  }}
+                >
+                  {shouldShowThumbnail ? (
+                    <div className="w-full aspect-square mb-2 flex items-center justify-center overflow-hidden rounded">
+                      <ThumbnailImage file={file} className="w-full h-full object-cover" />
+                    </div>
+                  ) : (
+                    <i 
+                      className={`${
+                        file.isDirectory 
+                          ? 'pi pi-folder text-yellow-500' 
+                          : 'pi pi-file text-blue-400'
+                      } text-5xl mb-2`}
+                    ></i>
+                  )}
+                  <span 
+                    className={`text-sm text-center break-words w-full ${
+                      darkMode ? 'text-gray-300' : 'text-gray-700'
+                    }`}
+                    title={file.name}
+                  >
+                    {file.name}
+                  </span>
+                  {!file.isDirectory && (
+                    <span className={`text-xs mt-1 ${darkMode ? 'text-gray-500' : 'text-gray-500'}`}>
+                      {formatFileSize(file.size)}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <DataTable

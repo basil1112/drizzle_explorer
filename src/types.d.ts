@@ -35,6 +35,16 @@ interface ElectronAPI {
   writeChunk: (streamId: string, chunk: Uint8Array) => Promise<void>;
   finalizeWriteStream: (streamId: string) => Promise<void>;
   cancelWriteStream: (streamId: string) => Promise<void>;
+  // Settings
+  getSetting: (key: string) => Promise<string | undefined>;
+  setSetting: (key: string, value: string) => Promise<boolean>;
+  getAllSettings: () => Promise<Record<string, string>>;
+  // Compression
+  compress7zip: (sourcePath: string, outputPath?: string) => Promise<{success: boolean; outputPath?: string; error?: string}>;
+  compressNative: (sourcePath: string, outputPath?: string) => Promise<{success: boolean; outputPath?: string; error?: string}>;
+  extract7zip: (archivePath: string, outputDir?: string) => Promise<{success: boolean; outputPath?: string; error?: string}>;
+  extractNative: (archivePath: string, outputDir?: string) => Promise<{success: boolean; outputPath?: string; error?: string}>;
+  isCompressedFile: (filePath: string) => Promise<boolean>;
 }
 
 export interface Profile {
