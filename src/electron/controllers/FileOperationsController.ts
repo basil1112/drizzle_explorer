@@ -1,5 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+
+const execAsync = promisify(exec);
 
 export class FileOperationsController {
     private copiedPath: string | null = null;
@@ -44,9 +48,22 @@ export class FileOperationsController {
     }
 
     /**
-     * Windows-specific file copy using native API
+     * Windows-specific file copy using robocopy, then native API, then Node.js fallback
      */
     private async copyFileWindows(src: string, dst: string): Promise<boolean> {
+        // Try robocopy first
+        try {
+            console.log('Trying robocopy...');
+            const result = await this.copyFileRobocopy(src, dst);
+            if (result) {
+                console.log('✅ Robocopy succeeded');
+                return true;
+            }
+        } catch (robocopyError: any) {
+            console.warn('Robocopy failed:', robocopyError.message);
+        }
+
+        // Try Windows API as second option
         try {
             const win32 = require('win32-api');
             const { Kernel32 } = win32;
@@ -115,11 +132,77 @@ export class FileOperationsController {
         } catch (apiError: any) {
             console.log('❌ Windows API failed:', apiError.message);
 
-            // Fallback to Node.js
+            // Final fallback to Node.js fs
             const fs = require('fs/promises');
             await fs.copyFile(src, dst);
             console.log('✅ Fallback to fs.copyFile successful');
             return true;
+        }
+    }
+
+    /**
+     * Copy file using robocopy command
+     */
+    private async copyFileRobocopy(src: string, dst: string): Promise<boolean> {
+        try {
+            const srcDir = path.dirname(src);
+            const srcFile = path.basename(src);
+            const dstDir = path.dirname(dst);
+            const dstFile = path.basename(dst);
+
+            // Robocopy syntax: robocopy <Source> <Destination> <File> [options]
+            // /NFL = No File List (reduce output)
+            // /NDL = No Directory List (reduce output)
+            // /NJH = No Job Header (reduce output)
+            // /NJS = No Job Summary (reduce output)
+            // /NP = No Progress (reduce output)
+            // /R:0 = 0 Retries on failed copies
+            // /W:0 = 0 Seconds wait time between retries
+            const command = `robocopy "${srcDir}" "${dstDir}" "${srcFile}" /NFL /NDL /NJH /NJS /NP /R:0 /W:0`;
+
+            console.log('Executing robocopy command:', command);
+            const { stdout, stderr } = await execAsync(command);
+            
+            // If we need to rename the file, do it after copying
+            if (dstFile !== srcFile) {
+                const tempDst = path.join(dstDir, srcFile);
+                await fs.promises.rename(tempDst, dst);
+                console.log('Renamed file after robocopy');
+            }
+
+            console.log('Robocopy stdout:', stdout);
+            if (stderr) {
+                console.log('Robocopy stderr:', stderr);
+            }
+
+            return true;
+        } catch (error: any) {
+            // Robocopy returns exit codes > 0 even on success
+            // Exit codes 0-7 are considered success, 8+ are failures
+            if (error.code !== undefined) {
+                const exitCode = typeof error.code === 'number' ? error.code : parseInt(error.code);
+                if (exitCode >= 0 && exitCode < 8) {
+                    console.log(`Robocopy completed with exit code ${exitCode} (success)`);
+                    
+                    // Handle file renaming if needed
+                    const srcFile = path.basename(src);
+                    const dstFile = path.basename(dst);
+                    if (dstFile !== srcFile) {
+                        const dstDir = path.dirname(dst);
+                        const tempDst = path.join(dstDir, srcFile);
+                        try {
+                            await fs.promises.rename(tempDst, dst);
+                            console.log('Renamed file after robocopy');
+                        } catch (renameError) {
+                            console.warn('Failed to rename after robocopy:', renameError);
+                            throw error;
+                        }
+                    }
+                    
+                    return true;
+                }
+            }
+            throw error;
         }
     }
 
@@ -141,6 +224,21 @@ export class FileOperationsController {
      */
     async copyDirectory(src: string, dst: string): Promise<boolean> {
         try {
+            // Try robocopy for Windows directory copy (most efficient)
+            if (process.platform === 'win32') {
+                try {
+                    console.log('Trying robocopy for directory...');
+                    const result = await this.copyDirectoryRobocopy(src, dst);
+                    if (result) {
+                        console.log('✅ Robocopy directory copy succeeded');
+                        return true;
+                    }
+                } catch (robocopyError: any) {
+                    console.warn('Robocopy directory copy failed:', robocopyError.message);
+                }
+            }
+
+            // Fallback to recursive copy
             await fs.promises.mkdir(dst, { recursive: true });
             const entries = await fs.promises.readdir(src, { withFileTypes: true });
 
@@ -159,6 +257,45 @@ export class FileOperationsController {
         } catch (error) {
             console.error('Error copying directory:', error);
             return false;
+        }
+    }
+
+    /**
+     * Copy directory using robocopy command
+     */
+    private async copyDirectoryRobocopy(src: string, dst: string): Promise<boolean> {
+        try {
+            // Robocopy syntax for directories: robocopy <Source> <Destination> /E [options]
+            // /E = Copy subdirectories, including empty ones
+            // /NFL = No File List (reduce output)
+            // /NDL = No Directory List (reduce output)
+            // /NJH = No Job Header (reduce output)
+            // /NJS = No Job Summary (reduce output)
+            // /NP = No Progress (reduce output)
+            // /R:0 = 0 Retries on failed copies
+            // /W:0 = 0 Seconds wait time between retries
+            const command = `robocopy "${src}" "${dst}" /E /NFL /NDL /NJH /NJS /NP /R:0 /W:0`;
+
+            console.log('Executing robocopy directory command:', command);
+            const { stdout, stderr } = await execAsync(command);
+
+            console.log('Robocopy stdout:', stdout);
+            if (stderr) {
+                console.log('Robocopy stderr:', stderr);
+            }
+
+            return true;
+        } catch (error: any) {
+            // Robocopy returns exit codes > 0 even on success
+            // Exit codes 0-7 are considered success, 8+ are failures
+            if (error.code !== undefined) {
+                const exitCode = typeof error.code === 'number' ? error.code : parseInt(error.code);
+                if (exitCode >= 0 && exitCode < 8) {
+                    console.log(`Robocopy directory completed with exit code ${exitCode} (success)`);
+                    return true;
+                }
+            }
+            throw error;
         }
     }
 

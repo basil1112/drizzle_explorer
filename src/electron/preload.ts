@@ -31,4 +31,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getFileInfo: (path: string): Promise<{fileName: string; fileSize: number}> => ipcRenderer.invoke('get-file-info', path),
   readFileChunk: (path: string, offset: number, length: number): Promise<ArrayBuffer> => ipcRenderer.invoke('read-file-chunk', path, offset, length),
   saveReceivedFile: (fileName: string, data: Uint8Array): Promise<string> => ipcRenderer.invoke('save-received-file', fileName, data),
+  // Stream-based file writing
+  initWriteStream: (fileName: string): Promise<{streamId: string; finalPath: string}> => ipcRenderer.invoke('init-write-stream', fileName),
+  writeChunk: (streamId: string, chunk: Uint8Array): Promise<void> => ipcRenderer.invoke('write-chunk', streamId, chunk),
+  finalizeWriteStream: (streamId: string): Promise<void> => ipcRenderer.invoke('finalize-write-stream', streamId),
+  cancelWriteStream: (streamId: string): Promise<void> => ipcRenderer.invoke('cancel-write-stream', streamId),
 });

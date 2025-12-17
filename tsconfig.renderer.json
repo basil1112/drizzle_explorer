@@ -4,7 +4,8 @@
     "module": "esnext",
     "jsx": "react",
     "outDir": "./dist/renderer",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "lib": ["ES2020", "DOM", "WebWorker"]
   },
   "include": ["src/renderer/**/*", "src/types.d.ts", "src/electron/models/**/*"],
   "exclude": ["node_modules"]

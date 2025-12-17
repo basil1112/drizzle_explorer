@@ -5,6 +5,7 @@ import { VideoOperationsController } from '../controllers/VideoOperationsControl
 import { ImageOperationsController } from '../controllers/ImageOperationsController';
 import { getProfile, updateProfile, regenerateUUID, getTransferQueue, addToTransferQueue, removeFromTransferQueue, clearTransferQueue } from '../database/db';
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 
 const fileSystemController = new FileSystemController();
@@ -176,6 +177,92 @@ export function registerFileSystemHandlers() {
       return finalPath;
     } catch (error: any) {
       throw new Error(`Failed to save file: ${error.message}`);
+    }
+  });
+
+  // Stream-based file writing for large file transfers
+  const activeStreams = new Map<string, fsSync.WriteStream>();
+
+  ipcMain.handle('init-write-stream', async (event, fileName: string) => {
+    try {
+      const downloadsPath = app.getPath('downloads');
+      const savePath = path.join(downloadsPath, fileName);
+      
+      // Check if file exists and create unique name if needed
+      let finalPath = savePath;
+      let counter = 1;
+      const ext = path.extname(fileName);
+      const baseName = path.basename(fileName, ext);
+      
+      while (await fs.access(finalPath).then(() => true).catch(() => false)) {
+        finalPath = path.join(downloadsPath, `${baseName} (${counter})${ext}`);
+        counter++;
+      }
+
+      // Create write stream
+      const writeStream = fsSync.createWriteStream(finalPath);
+      const streamId = `${Date.now()}-${Math.random()}`;
+      
+      activeStreams.set(streamId, writeStream);
+      
+      return { streamId, finalPath };
+    } catch (error: any) {
+      throw new Error(`Failed to initialize write stream: ${error.message}`);
+    }
+  });
+
+  ipcMain.handle('write-chunk', async (event, streamId: string, chunk: Uint8Array) => {
+    try {
+      const stream = activeStreams.get(streamId);
+      if (!stream) {
+        throw new Error(`Stream ${streamId} not found`);
+      }
+
+      // Write chunk to stream
+      return new Promise<void>((resolve, reject) => {
+        const canContinue = stream.write(Buffer.from(chunk));
+        if (canContinue) {
+          resolve();
+        } else {
+          // Wait for drain event if buffer is full
+          stream.once('drain', () => resolve());
+          stream.once('error', reject);
+        }
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to write chunk: ${error.message}`);
+    }
+  });
+
+  ipcMain.handle('finalize-write-stream', async (event, streamId: string) => {
+    try {
+      const stream = activeStreams.get(streamId);
+      if (!stream) {
+        throw new Error(`Stream ${streamId} not found`);
+      }
+
+      // Close the stream
+      return new Promise<void>((resolve, reject) => {
+        stream.end(() => {
+          activeStreams.delete(streamId);
+          resolve();
+        });
+        stream.once('error', reject);
+      });
+    } catch (error: any) {
+      throw new Error(`Failed to finalize write stream: ${error.message}`);
+    }
+  });
+
+  ipcMain.handle('cancel-write-stream', async (event, streamId: string) => {
+    try {
+      const stream = activeStreams.get(streamId);
+      if (stream) {
+        stream.destroy();
+        activeStreams.delete(streamId);
+      }
+    } catch (error: any) {
+      console.error('Error canceling write stream:', error);
     }
   });
 }

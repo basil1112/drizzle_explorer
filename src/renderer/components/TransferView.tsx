@@ -6,14 +6,11 @@ import { ProgressBar } from 'primereact/progressbar';
 import { TabView, TabPanel } from 'primereact/tabview';
 import { Message } from 'primereact/message';
 import { WebRTCFileTransfer, TransferProgress } from '../utils/webrtc';
+import { useTransfer } from '../contexts/TransferContext';
 import { Profile } from '../../types';
 import { formatFileSize } from '../utils/fileTypeUtils';
 
-interface TransferViewProps {
-    darkMode: boolean;
-}
-
-const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
+const TransferView: React.FC = () => {
     const [profile, setProfile] = useState<Profile | null>(null);
     const [mode, setMode] = useState<'send' | 'receive'>('send');
     const [connectionState, setConnectionState] = useState<'disconnected' | 'waiting' | 'connected'>('disconnected');
@@ -24,7 +21,8 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
     const [transferProgress, setTransferProgress] = useState<TransferProgress | null>(null);
     const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info', text: string } | null>(null);
     
-    const webrtcRef = useRef<WebRTCFileTransfer | null>(null);
+    const { webrtcRef } = useTransfer();
+    const isConnectedRef = useRef<boolean>(false);
 
     useEffect(() => {
         loadProfile();
@@ -86,6 +84,7 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
 
         const webrtc = new WebRTCFileTransfer(isInitiator);
         webrtcRef.current = webrtc;
+        isConnectedRef.current = false;
 
         // Set mode and initial state
         setMode(isInitiator ? 'send' : 'receive');
@@ -123,6 +122,7 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
         });
 
         webrtc.setOnConnection((connected) => {
+            isConnectedRef.current = connected;
             setConnectionState(connected ? 'connected' : 'disconnected');
             if (connected) {
                 showMessage('success', 'Connected to peer!');
@@ -184,13 +184,15 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
             return;
         }
 
-        if (!webrtcRef.current?.isConnected()) {
+        if (!isConnectedRef.current) {
             showMessage('error', 'Not connected to peer');
             return;
         }
 
         try {
-            await webrtcRef.current.sendFile(fileToSend);
+            if (webrtcRef.current) {
+                await webrtcRef.current.sendFile(fileToSend);
+            }
             // Remove from queue after successful send
             if (filePath && transferQueue.includes(filePath)) {
                 removeFromQueue(filePath);
@@ -223,9 +225,9 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
     };
 
     return (
-        <div className={`h-full overflow-auto p-6 ${darkMode ? 'bg-[#252525]' : 'bg-gray-50'}`}>
+        <div className="h-full overflow-auto p-6" style={{ backgroundColor: 'var(--surface-ground)' }}>
             <div className="max-w-6xl mx-auto">
-                <h2 className={`text-2xl font-bold mb-6 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                <h2 className="text-2xl font-bold mb-6" style={{ color: 'var(--text-color)' }}>
                     P2P File Transfer
                 </h2>
 
@@ -238,13 +240,13 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                 )}
 
                 {/* Profile Info */}
-                <Card className={`mb-4 ${darkMode ? 'bg-[#2a2a2a]' : 'bg-white'}`}>
+                <Card className="mb-4">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h3 className={`font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                            <h3 className="font-semibold" style={{ color: 'var(--text-color)' }}>
                                 Your UUID
                             </h3>
-                            <p className={`font-mono text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            <p className="font-mono text-sm mt-1" style={{ color: 'var(--text-color-secondary)' }}>
                                 {profile?.uuid}
                             </p>
                         </div>
@@ -258,8 +260,8 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                 </Card>
 
                 {/* Connection Setup */}
-                <Card className={`mb-4 ${darkMode ? 'bg-[#2a2a2a]' : 'bg-white'}`}>
-                    <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                <Card className="mb-4">
+                    <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-color)' }}>
                         Connection Setup
                     </h3>
 
@@ -284,11 +286,11 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                     {connectionState !== 'disconnected' && (
                         <>
                             {mode === 'receive' && !mySignal && (
-                                <div className={`p-4 rounded mb-4 ${darkMode ? 'bg-purple-900/20 border border-purple-800' : 'bg-purple-50 border border-purple-200'}`}>
-                                    <p className={`text-sm font-semibold mb-2 ${darkMode ? 'text-purple-200' : 'text-purple-800'}`}>
+                                <div className="p-4 rounded mb-4" style={{ backgroundColor: 'var(--highlight-bg)', border: '1px solid var(--highlight-border)' }}>
+                                    <p className="text-sm font-semibold mb-2" style={{ color: 'var(--text-color)' }}>
                                         📝 Receiver Workflow:
                                     </p>
-                                    <ol className={`text-sm space-y-1 ml-4 list-decimal ${darkMode ? 'text-purple-300' : 'text-purple-700'}`}>
+                                    <ol className="text-sm space-y-1 ml-4 list-decimal" style={{ color: 'var(--text-color-secondary)' }}>
                                         <li>Go to <strong>"Peer Connection Data"</strong> tab below</li>
                                         <li>Paste the <strong>sender's offer</strong> (the JSON data they sent you)</li>
                                         <li>Click <strong>"Connect to Peer"</strong> button</li>
@@ -300,14 +302,14 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                         <TabView>
                             <TabPanel header="My Connection Data">
                                 <div className="space-y-2">
-                                    <div className={`p-3 rounded mb-2 ${darkMode ? 'bg-blue-900/20 border border-blue-800' : 'bg-blue-50 border border-blue-200'}`}>
-                                        <p className={`text-xs ${darkMode ? 'text-blue-300' : 'text-blue-700'}`}>
+                                    <div className="p-3 rounded mb-2" style={{ backgroundColor: 'var(--highlight-bg)', border: '1px solid var(--surface-border)' }}>
+                                        <p className="text-xs" style={{ color: 'var(--text-color)' }}>
                                             <strong>Instructions:</strong> {mode === 'send' 
                                                 ? 'Copy the entire text below and send it to the receiver via any messaging app (WhatsApp, Telegram, email, etc.)'
                                                 : 'After pasting the sender\'s data and clicking Connect, your answer will appear here. Copy it and send it back to the sender.'}
                                         </p>
                                     </div>
-                                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <label className="block text-sm font-medium" style={{ color: 'var(--text-color)' }}>
                                         Your Connection Data:
                                     </label>
                                     <InputTextarea
@@ -328,14 +330,14 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                             </TabPanel>
                             <TabPanel header="Peer Connection Data">
                                 <div className="space-y-2">
-                                    <div className={`p-3 rounded mb-2 ${darkMode ? 'bg-orange-900/20 border border-orange-800' : 'bg-orange-50 border border-orange-200'}`}>
-                                        <p className={`text-xs ${darkMode ? 'text-orange-300' : 'text-orange-700'}`}>
+                                    <div className="p-3 rounded mb-2" style={{ backgroundColor: 'var(--highlight-bg)', border: '1px solid var(--surface-border)' }}>
+                                        <p className="text-xs" style={{ color: 'var(--text-color)' }}>
                                             <strong>Instructions:</strong> {mode === 'send' 
                                                 ? 'Paste the receiver\'s answer data here and click Connect to establish the connection.'
                                                 : 'Paste the sender\'s offer data here first, then click Connect. This will generate your answer in the other tab.'}
                                         </p>
                                     </div>
-                                    <label className={`block text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <label className="block text-sm font-medium" style={{ color: 'var(--text-color)' }}>
                                         Paste Peer's Connection Data:
                                     </label>
                                     <InputTextarea
@@ -359,7 +361,7 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                     )}
 
                     <div className="mt-4 flex items-center gap-2">
-                        <span className={`text-sm font-medium ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                        <span className="text-sm font-medium" style={{ color: 'var(--text-color)' }}>
                             Status:
                         </span>
                         <span className={`px-3 py-1 rounded text-sm font-medium ${
@@ -376,9 +378,9 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
 
                 {/* Transfer Queue */}
                 {transferQueue.length > 0 && (
-                    <Card className={`mb-4 ${darkMode ? 'bg-[#2a2a2a]' : 'bg-white'}`}>
+                    <Card className="mb-4">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className={`text-lg font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                            <h3 className="text-lg font-semibold" style={{ color: 'var(--text-color)' }}>
                                 Transfer Queue ({transferQueue.length})
                             </h3>
                             <Button
@@ -395,13 +397,12 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                             {transferQueue.map((filePath, index) => (
                                 <div
                                     key={index}
-                                    className={`flex items-center justify-between p-3 rounded border ${
-                                        darkMode ? 'border-gray-700 bg-[#1e1e1e]' : 'border-gray-200 bg-gray-50'
-                                    }`}
+                                    className="flex items-center justify-between p-3 rounded border"
+                                    style={{ borderColor: 'var(--surface-border)', backgroundColor: 'var(--surface-ground)' }}
                                 >
                                     <div className="flex items-center gap-2 flex-1 min-w-0">
                                         <i className="pi pi-file text-blue-500" />
-                                        <span className={`text-sm truncate ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                        <span className="text-sm truncate" style={{ color: 'var(--text-color)' }}>
                                             {filePath.split(/[\\/]/).pop()}
                                         </span>
                                     </div>
@@ -432,8 +433,8 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
 
                 {/* File Transfer */}
                 {connectionState === 'connected' && mode === 'send' && (
-                    <Card className={`mb-4 ${darkMode ? 'bg-[#2a2a2a]' : 'bg-white'}`}>
-                        <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                    <Card className="mb-4">
+                        <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-color)' }}>
                             Send File
                         </h3>
 
@@ -446,7 +447,7 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
                                     outlined
                                 />
                                 {selectedFile && (
-                                    <span className={`flex items-center text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <span className="flex items-center text-sm" style={{ color: 'var(--text-color)' }}>
                                         {selectedFile.split(/[\\/]/).pop()}
                                     </span>
                                 )}
@@ -465,25 +466,25 @@ const TransferView: React.FC<TransferViewProps> = ({ darkMode }) => {
 
                 {/* Transfer Progress */}
                 {transferProgress && (
-                    <Card className={`${darkMode ? 'bg-[#2a2a2a]' : 'bg-white'}`}>
-                        <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                    <Card>
+                        <h3 className="text-lg font-semibold mb-4" style={{ color: 'var(--text-color)' }}>
                             Transfer Progress
                         </h3>
 
                         <div className="space-y-4">
                             <div>
                                 <div className="flex justify-between mb-2">
-                                    <span className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                                    <span className="text-sm" style={{ color: 'var(--text-color)' }}>
                                         {transferProgress.fileName}
                                     </span>
-                                    <span className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                                    <span className="text-sm" style={{ color: 'var(--text-color-secondary)' }}>
                                         {transferProgress.percentage.toFixed(1)}%
                                     </span>
                                 </div>
                                 <ProgressBar value={transferProgress.percentage} />
                             </div>
 
-                            <div className={`grid grid-cols-2 gap-4 text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
+                            <div className="grid grid-cols-2 gap-4 text-sm" style={{ color: 'var(--text-color-secondary)' }}>
                                 <div>
                                     <span className="font-medium">Size:</span> {formatFileSize(transferProgress.fileSize)}
                                 </div>

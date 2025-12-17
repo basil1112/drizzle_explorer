@@ -30,6 +30,11 @@ interface ElectronAPI {
   getFileInfo: (path: string) => Promise<{fileName: string; fileSize: number}>;
   readFileChunk: (path: string, offset: number, length: number) => Promise<ArrayBuffer>;
   saveReceivedFile: (fileName: string, data: Uint8Array) => Promise<string>;
+  // Stream-based file writing
+  initWriteStream: (fileName: string) => Promise<{streamId: string; finalPath: string}>;
+  writeChunk: (streamId: string, chunk: Uint8Array) => Promise<void>;
+  finalizeWriteStream: (streamId: string) => Promise<void>;
+  cancelWriteStream: (streamId: string) => Promise<void>;
 }
 
 export interface Profile {

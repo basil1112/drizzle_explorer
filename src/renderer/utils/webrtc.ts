@@ -211,11 +211,12 @@ export class WebRTCFileTransfer {
         }
     }
 
-    private receivedChunks: Uint8Array[] = [];
     private receivedMetadata: { fileName: string; fileSize: number } | null = null;
     private receivedBytes: number = 0;
+    private writeStreamId: string | null = null;
+    private writeStreamPath: string | null = null;
 
-    private handleIncomingData(data: any) {
+    private async handleIncomingData(data: any) {
         console.log('📥 Received data:', typeof data, data instanceof ArrayBuffer ? `ArrayBuffer(${data.byteLength} bytes)` : data instanceof Uint8Array ? `Uint8Array(${data.length} bytes)` : 'object/string');
         
         // Try to parse as JSON (metadata or control message)
@@ -223,7 +224,7 @@ export class WebRTCFileTransfer {
             try {
                 const message = JSON.parse(data);
                 console.log('📋 Parsed message from string:', message);
-                this.handleControlMessage(message);
+                await this.handleControlMessage(message);
                 return;
             } catch (e) {
                 console.warn('⚠️ Failed to parse string as JSON:', e);
@@ -231,7 +232,7 @@ export class WebRTCFileTransfer {
         } else if (typeof data === 'object' && !ArrayBuffer.isView(data) && !(data instanceof ArrayBuffer)) {
             // Data is already a parsed object (simple-peer sometimes does this)
             console.log('📋 Received object directly:', data);
-            this.handleControlMessage(data);
+            await this.handleControlMessage(data);
             return;
         } else if (data instanceof Uint8Array || data instanceof ArrayBuffer) {
             // Could be either text (JSON) or binary chunk
@@ -244,7 +245,7 @@ export class WebRTCFileTransfer {
                 // If it parses successfully and has a type field, it's a control message
                 if (message.type) {
                     console.log('📋 Decoded message from Uint8Array:', message);
-                    this.handleControlMessage(message);
+                    await this.handleControlMessage(message);
                     return;
                 }
             } catch (e) {
@@ -252,13 +253,16 @@ export class WebRTCFileTransfer {
             }
             
             // Binary data chunk
-            if (this.receivedMetadata) {
+            if (this.receivedMetadata && this.writeStreamId) {
                 const chunk = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
-                this.receivedChunks.push(chunk);
+                
+                // Write chunk directly to disk via stream
+                await window.electronAPI.writeChunk(this.writeStreamId, chunk);
+                
                 this.receivedBytes += chunk.length;
 
                 const percentage = (this.receivedBytes / this.receivedMetadata.fileSize) * 100;
-                console.log(`📦 Chunk received: ${this.receivedBytes}/${this.receivedMetadata.fileSize} (${percentage.toFixed(1)}%)`);
+                console.log(`📦 Chunk written to disk: ${this.receivedBytes}/${this.receivedMetadata.fileSize} (${percentage.toFixed(1)}%)`);
 
                 this.currentTransfer = {
                     fileName: this.receivedMetadata.fileName,
@@ -269,20 +273,38 @@ export class WebRTCFileTransfer {
                 };
                 this.updateProgress(this.currentTransfer);
             } else {
-                console.warn('⚠️ Received chunk but no metadata yet!');
+                console.warn('⚠️ Received chunk but no metadata or stream yet!');
             }
         }
     }
 
-    private handleControlMessage(message: any) {
+    private async handleControlMessage(message: any) {
         if (message.type === 'metadata') {
             console.log('📄 Receiving file metadata:', message.fileName, `(${message.fileSize} bytes)`);
             this.receivedMetadata = {
                 fileName: message.fileName,
                 fileSize: message.fileSize
             };
-            this.receivedChunks = [];
             this.receivedBytes = 0;
+
+            // Initialize write stream
+            try {
+                const { streamId, finalPath } = await window.electronAPI.initWriteStream(message.fileName);
+                this.writeStreamId = streamId;
+                this.writeStreamPath = finalPath;
+                console.log('✅ Write stream initialized:', streamId, 'Path:', finalPath);
+            } catch (error: any) {
+                console.error('❌ Failed to initialize write stream:', error);
+                if (this.currentTransfer) {
+                    this.currentTransfer = {
+                        ...this.currentTransfer,
+                        status: 'error',
+                        error: `Failed to initialize write stream: ${error.message}`
+                    };
+                    this.updateProgress(this.currentTransfer);
+                }
+                return;
+            }
 
             this.currentTransfer = {
                 fileName: message.fileName,
@@ -294,9 +316,14 @@ export class WebRTCFileTransfer {
             this.updateProgress(this.currentTransfer);
             console.log('✅ Ready to receive chunks');
         } else if (message.type === 'complete') {
-            console.log('🏁 Received completion signal, saving file...');
-            this.saveReceivedFile();
+            console.log('🏁 Received completion signal, finalizing file...');
+            await this.finalizeReceivedFile();
         } else if (message.type === 'cancel') {
+            if (this.writeStreamId) {
+                await window.electronAPI.cancelWriteStream(this.writeStreamId);
+                this.writeStreamId = null;
+                this.writeStreamPath = null;
+            }
             if (this.currentTransfer) {
                 this.currentTransfer = {
                     ...this.currentTransfer,
@@ -304,57 +331,48 @@ export class WebRTCFileTransfer {
                 };
                 this.updateProgress(this.currentTransfer);
             }
-            this.receivedChunks = [];
             this.receivedMetadata = null;
             this.receivedBytes = 0;
         }
     }
 
-    private async saveReceivedFile() {
-        console.log('💾 saveReceivedFile called');
+    private async finalizeReceivedFile() {
+        console.log('💾 finalizeReceivedFile called');
         
-        if (!this.receivedMetadata || this.receivedChunks.length === 0) {
-            console.error('❌ Cannot save: missing metadata or chunks', {
+        if (!this.receivedMetadata || !this.writeStreamId) {
+            console.error('❌ Cannot finalize: missing metadata or stream', {
                 hasMetadata: !!this.receivedMetadata,
-                chunksCount: this.receivedChunks.length
+                hasStream: !!this.writeStreamId
             });
             return;
         }
 
         try {
-            // Combine chunks
-            const totalSize = this.receivedChunks.reduce((sum, chunk) => sum + chunk.length, 0);
-            console.log(`🔧 Combining ${this.receivedChunks.length} chunks (${totalSize} bytes)`);
+            console.log('🔧 Finalizing write stream:', this.writeStreamId);
             
-            const fileBuffer = new Uint8Array(totalSize);
-            let offset = 0;
-            for (const chunk of this.receivedChunks) {
-                fileBuffer.set(chunk, offset);
-                offset += chunk.length;
-            }
-
-            console.log('📤 Calling IPC to save file:', this.receivedMetadata.fileName);
+            // Finalize the stream
+            await window.electronAPI.finalizeWriteStream(this.writeStreamId);
             
-            // Save file using Electron API
-            const savedPath = await window.electronAPI.saveReceivedFile(
-                this.receivedMetadata.fileName,
-                fileBuffer
-            );
-            
-            console.log('✅ File saved successfully:', savedPath);
+            console.log('✅ File saved successfully:', this.writeStreamPath);
 
             if (this.currentTransfer) {
                 this.currentTransfer = {
                     ...this.currentTransfer,
                     status: 'completed',
                     percentage: 100,
-                    savedPath: savedPath
+                    savedPath: this.writeStreamPath || undefined
                 };
-                console.log('📊 Updating progress to completed with path:', savedPath);
                 this.updateProgress(this.currentTransfer);
             }
+
+            // Clean up
+            this.writeStreamId = null;
+            this.writeStreamPath = null;
+            this.receivedMetadata = null;
+            this.receivedBytes = 0;
+
         } catch (error: any) {
-            console.error('❌ Error saving file:', error);
+            console.error('❌ Error finalizing file:', error);
             if (this.currentTransfer) {
                 this.currentTransfer = {
                     ...this.currentTransfer,
@@ -363,10 +381,6 @@ export class WebRTCFileTransfer {
                 };
                 this.updateProgress(this.currentTransfer);
             }
-        } finally {
-            this.receivedChunks = [];
-            this.receivedMetadata = null;
-            this.receivedBytes = 0;
         }
     }
 
@@ -376,8 +390,20 @@ export class WebRTCFileTransfer {
         }
     }
 
-    public cancelTransfer() {
+    public async cancelTransfer() {
         this.transferCancelled = true;
+        
+        // Cancel write stream if active
+        if (this.writeStreamId) {
+            try {
+                await window.electronAPI.cancelWriteStream(this.writeStreamId);
+            } catch (error) {
+                console.error('Error canceling write stream:', error);
+            }
+            this.writeStreamId = null;
+            this.writeStreamPath = null;
+        }
+        
         if (this.currentTransfer) {
             this.currentTransfer = {
                 ...this.currentTransfer,
@@ -391,6 +417,13 @@ export class WebRTCFileTransfer {
         if (this.peer) {
             this.peer.destroy();
             this.peer = null;
+        }
+        
+        // Cancel any active stream
+        if (this.writeStreamId) {
+            window.electronAPI.cancelWriteStream(this.writeStreamId).catch(console.error);
+            this.writeStreamId = null;
+            this.writeStreamPath = null;
         }
     }
 

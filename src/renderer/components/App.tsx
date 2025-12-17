@@ -7,7 +7,8 @@ import TopBar from './TopBar';
 import BreadcrumbBar from './BreadcrumbBar';
 import PreviewPanel from './PreviewPanel';
 import SettingsView from './SettingsView';
-import TransferView from './TransferView';
+import TransferModal from './TransferModal';
+import { TransferProvider, useTransfer } from '../contexts/TransferContext';
 
 interface DriveEntry {
     path: string;
@@ -24,7 +25,7 @@ interface FileEntry {
     type: 'file' | 'folder';
 }
 
-type ViewType = 'home' | 'browser' | 'settings' | 'transfer';
+type ViewType = 'home' | 'browser' | 'settings';
 
 interface TabState {
     id: number;
@@ -56,6 +57,7 @@ const App: React.FC = () => {
     ]);
     const [activeTabIndex, setActiveTabIndex] = useState<number>(0);
     const [nextTabId, setNextTabId] = useState<number>(1);
+    const { startTransfer } = useTransfer();
 
     useEffect(() => {
         loadDrives();
@@ -227,12 +229,8 @@ const App: React.FC = () => {
     };
 
     const handleTransferClick = () => {
-        const currentTab = tabs[activeTabIndex];
-        updateTab(currentTab.id, {
-            view: 'transfer',
-            title: 'Transfer',
-            selectedFile: null
-        });
+        // Open the transfer modal
+        startTransfer(true); // Default to initiator mode, can add UI to choose
     };
 
     const handleFileSelect = (file: FileEntry) => {
@@ -299,8 +297,6 @@ const App: React.FC = () => {
                                 />
                             ) : currentTab.view === 'settings' ? (
                                 <SettingsView darkMode={darkMode} />
-                            ) : currentTab.view === 'transfer' ? (
-                                <TransferView darkMode={darkMode} />
                             ) : (
                                 <BrowserView
                                     currentPath={currentTab.path}
@@ -325,8 +321,19 @@ const App: React.FC = () => {
                     </SplitterPanel>
                 </Splitter>
             </div>
+
+            {/* Transfer Modal - floats above everything */}
+            <TransferModal />
         </div>
     );
 };
 
-export default App;
+const AppWithProvider: React.FC = () => {
+    return (
+        <TransferProvider>
+            <App />
+        </TransferProvider>
+    );
+};
+
+export default AppWithProvider;
