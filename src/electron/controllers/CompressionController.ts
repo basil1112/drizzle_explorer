@@ -37,7 +37,7 @@ export class CompressionController {
                         reject(err);
                     } else {
                         console.log('7zip compression successful:', outputPath);
-                        resolve(outputPath);
+                        resolve(outputPath!);
                     }
                 });
             });
@@ -110,7 +110,7 @@ export class CompressionController {
                         reject(err);
                     } else {
                         console.log('7zip extraction successful:', outputDir);
-                        resolve(outputDir);
+                        resolve(outputDir!);
                     }
                 });
             });
