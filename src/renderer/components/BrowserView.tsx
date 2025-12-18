@@ -821,7 +821,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   };
 
   return (
-    <div className="p-2" onContextMenu={handleBackgroundContextMenu}>
+    <div className="p-1" onContextMenu={handleBackgroundContextMenu}>
       <ContextMenu model={menuItems} ref={cm} />
 
       {/* Delete Confirmation Dialog */}
@@ -1100,7 +1100,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
             <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Empty directory</p>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4 p-4">
+          <div className="p-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '1rem' }}>
             {files.map((file) => {
               const shouldShowThumbnail = showThumbnails && !file.isDirectory && (isImage(file.name) || isVideo(file.name));
               
