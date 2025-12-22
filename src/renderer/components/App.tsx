@@ -63,7 +63,25 @@ const App: React.FC = () => {
 
     useEffect(() => {
         loadDrives();
+        loadLayoutTheme();
     }, []);
+
+    const loadLayoutTheme = async () => {
+        try {
+            const theme = await window.electronAPI.getLayoutTheme();
+            if (theme) {
+                setDarkMode(theme.darkMode);
+                // Update all tabs with saved layout
+                const updatedTabs = tabs.map(tab => ({
+                    ...tab,
+                    viewMode: theme.layout as 'list' | 'grid'
+                }));
+                setTabs(updatedTabs);
+            }
+        } catch (err) {
+            console.error('Error loading layout theme:', err);
+        }
+    };
 
     useEffect(() => {
         // Update theme
@@ -81,6 +99,13 @@ const App: React.FC = () => {
 
         // Update body background
         document.body.style.backgroundColor = darkMode ? '#1e1e1e' : '#f5f5f5';
+
+        // Save dark mode to database (skip on initial load)
+        if (tabs.length > 0) {
+            window.electronAPI.updateDarkMode(darkMode).catch(err => {
+                console.error('Error saving dark mode:', err);
+            });
+        }
     }, [darkMode]); 
     
     
@@ -243,11 +268,24 @@ const App: React.FC = () => {
         });
     };
 
-    const handleViewModeChange = (mode: 'list' | 'grid') => {
+    const handleClosePreview = () => {
+        const currentTab = tabs[activeTabIndex];
+        updateTab(currentTab.id, {
+            selectedFile: null
+        });
+    };
+
+    const handleViewModeChange = async (mode: 'list' | 'grid') => {
         const currentTab = tabs[activeTabIndex];
         updateTab(currentTab.id, {
             viewMode: mode
         });
+        // Save layout to database
+        try {
+            await window.electronAPI.updateLayout(mode);
+        } catch (err) {
+            console.error('Error saving layout:', err);
+        }
     };
 
     const currentTab = tabs[activeTabIndex];
@@ -330,6 +368,7 @@ const App: React.FC = () => {
                         <PreviewPanel
                             selectedFile={currentTab.selectedFile}
                             darkMode={darkMode}
+                            onClose={handleClosePreview}
                         />
                     </SplitterPanel>
                 </Splitter>

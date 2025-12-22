@@ -22,6 +22,13 @@ export interface Setting {
     value: string;
 }
 
+export interface LayoutTheme {
+    id: number;
+    layout: string;
+    darkMode: boolean;
+    updatedAt: string;
+}
+
 let db: Database.Database | null = null;
 
 export function initDatabase(): Database.Database {
@@ -63,6 +70,16 @@ export function initDatabase(): Database.Database {
         )
     `);
 
+    // Create layout_themes table
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS layout_themes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            layout TEXT NOT NULL,
+            darkMode INTEGER NOT NULL DEFAULT 0,
+            updatedAt TEXT NOT NULL
+        )
+    `);
+
     // Initialize default settings if they don't exist
     const showThumbnails = db.prepare('SELECT value FROM settings WHERE key = ?').get('showThumbnails');
     if (!showThumbnails) {
@@ -78,6 +95,16 @@ export function initDatabase(): Database.Database {
             INSERT INTO profiles (uuid, name, createdAt, updatedAt)
             VALUES (?, ?, ?, ?)
         `).run(uuid, 'Default Profile', now, now);
+    }
+
+    // Initialize default layout theme if none exists
+    const themeCount = db.prepare('SELECT COUNT(*) as count FROM layout_themes').get() as { count: number };
+    if (themeCount.count === 0) {
+        const now = new Date().toISOString();
+        db.prepare(`
+            INSERT INTO layout_themes (layout, darkMode, updatedAt)
+            VALUES (?, ?, ?)
+        `).run('default', 0, now);
     }
 
     return db;
@@ -194,4 +221,59 @@ export function getAllSettings(): Record<string, string> {
         settings[row.key] = row.value;
     });
     return settings;
+}
+
+// Layout theme operations
+export function getLayoutTheme(): LayoutTheme | undefined {
+    const db = getDatabase();
+    const result = db.prepare('SELECT * FROM layout_themes LIMIT 1').get() as any;
+    if (result) {
+        // Convert INTEGER to boolean
+        return {
+            ...result,
+            darkMode: result.darkMode === 1
+        };
+    }
+    return result;
+}
+
+export function updateLayoutTheme(layout: string, darkMode: boolean): LayoutTheme {
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    
+    const theme = db.prepare('SELECT * FROM layout_themes LIMIT 1').get() as LayoutTheme | undefined;
+    
+    if (theme) {
+        db.prepare('UPDATE layout_themes SET layout = ?, darkMode = ?, updatedAt = ? WHERE id = ?')
+            .run(layout, darkMode ? 1 : 0, now, theme.id);
+    } else {
+        db.prepare(`
+            INSERT INTO layout_themes (layout, darkMode, updatedAt)
+            VALUES (?, ?, ?)
+        `).run(layout, darkMode ? 1 : 0, now);
+    }
+    
+    const result = db.prepare('SELECT * FROM layout_themes LIMIT 1').get() as any;
+    return {
+        ...result,
+        darkMode: result.darkMode === 1
+    };
+}
+
+export function updateLayout(layout: string): LayoutTheme {
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    const currentTheme = getLayoutTheme();
+    const darkMode = currentTheme?.darkMode ?? false;
+    
+    return updateLayoutTheme(layout, darkMode);
+}
+
+export function updateDarkMode(darkMode: boolean): LayoutTheme {
+    const db = getDatabase();
+    const now = new Date().toISOString();
+    const currentTheme = getLayoutTheme();
+    const layout = currentTheme?.layout ?? 'default';
+    
+    return updateLayoutTheme(layout, darkMode);
 }

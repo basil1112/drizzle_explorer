@@ -35,7 +35,6 @@ if (!PeerConnection) {
 let peerConnection: any | null = null;
 let dataChannel: any | null = null;
 let receivingMetadata: { fileName: string; fileSize: number } | null = null;
-let receivedChunks: Uint8Array[] = [];
 let receivedBytes = 0;
 let transferStartTime = 0;
 
@@ -114,10 +113,9 @@ async function createOffer(): Promise<void> {
     try {
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
-        console.log('📤 Worker: Created offer');
+        console.log('Worker: Created offer');
         // Signal will be sent when ICE gathering completes
     } catch (error) {
-        console.error('❌ Worker: Failed to create offer:', error);
         postToMain('error', `Failed to create offer: ${error}`);
     }
 }
@@ -194,9 +192,14 @@ function handleControlMessage(message: any): void {
                 fileName: message.fileName,
                 fileSize: message.fileSize
             };
-            receivedChunks = [];
             receivedBytes = 0;
             transferStartTime = Date.now();
+            
+            // Signal to main thread to start streaming write
+            postToMain('file-start', {
+                fileName: message.fileName,
+                fileSize: message.fileSize
+            });
             
             postToMain('progress', {
                 fileName: message.fileName,
@@ -215,7 +218,6 @@ function handleControlMessage(message: any): void {
 
         case 'cancel':
             receivingMetadata = null;
-            receivedChunks = [];
             receivedBytes = 0;
             postToMain('progress', {
                 fileName: '',
@@ -232,7 +234,13 @@ function handleControlMessage(message: any): void {
 function handleFileChunk(chunk: Uint8Array): void {
     if (!receivingMetadata) return;
 
-    receivedChunks.push(chunk);
+    // Stream chunk immediately to main thread for disk write
+    postToMain('file-chunk', {
+        fileName: receivingMetadata.fileName,
+        chunk: chunk,
+        offset: receivedBytes
+    });
+
     receivedBytes += chunk.byteLength;
 
     const percentage = (receivedBytes / receivingMetadata.fileSize) * 100;
@@ -249,28 +257,22 @@ function handleFileChunk(chunk: Uint8Array): void {
     });
 }
 
-// Save received file
+// Complete received file
 function saveReceivedFile(): void {
     if (!receivingMetadata) return;
 
     try {
-        // Combine chunks
-        const totalSize = receivedChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-        const combined = new Uint8Array(totalSize);
-        let offset = 0;
-        for (const chunk of receivedChunks) {
-            combined.set(chunk, offset);
-            offset += chunk.byteLength;
-        }
-
-        // Send to main thread for file I/O
-        postToMain('save-file', {
-            fileName: receivingMetadata.fileName,
-            fileData: combined
+        const fileName = receivingMetadata.fileName;
+        
+        // Signal completion - all chunks already written to disk
+        postToMain('file-complete', {
+            fileName: fileName,
+            totalBytes: receivedBytes
         });
 
+        console.log(`✅ Worker: File receive complete: ${fileName} (${receivedBytes} bytes)`);
+
         receivingMetadata = null;
-        receivedChunks = [];
         receivedBytes = 0;
     } catch (error) {
         console.error('❌ Worker: Save error:', error);
@@ -341,7 +343,6 @@ function cancelTransfer(): void {
         dataChannel.send(JSON.stringify({ type: 'cancel' }));
     }
     receivingMetadata = null;
-    receivedChunks = [];
     receivedBytes = 0;
 }
 

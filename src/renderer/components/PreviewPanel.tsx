@@ -12,13 +12,23 @@ interface PreviewPanelProps {
         modified: Date;
     } | null;
     darkMode: boolean;
+    onClose?: () => void;
 }
 
-const PreviewPanel: React.FC<PreviewPanelProps> = ({ selectedFile, darkMode }) => {
+const PreviewPanel: React.FC<PreviewPanelProps> = ({ selectedFile, darkMode, onClose }) => {
     const [imageLoading, setImageLoading] = useState(true);
     const [videoLoading, setVideoLoading] = useState(true);
     const [audioLoading, setAudioLoading] = useState(true);
     const [pdfLoading, setPdfLoading] = useState(true);
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const handleRefresh = () => {
+        setImageLoading(true);
+        setVideoLoading(true);
+        setAudioLoading(true);
+        setPdfLoading(true);
+        setRefreshKey(prev => prev + 1);
+    };
 
     // Reset loading states when file changes
     React.useEffect(() => {
@@ -33,15 +43,29 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ selectedFile, darkMode }) =
     if (!selectedFile || selectedFile.isDirectory) {
         return (
             <div className={`h-full p-4 ${darkMode ? 'bg-[#252525]' : 'bg-white'}`}>
-                <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                    Preview
-                </h3>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className={`text-lg font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                        Preview
+                    </h3>
+                    {onClose && (
+                        <button
+                            onClick={onClose}
+                            className={`p-2 rounded hover:bg-opacity-10 hover:bg-gray-500 transition-colors ${
+                                darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                            title="Close preview"
+                        >
+                            <i className="pi pi-times"></i>
+                        </button>
+                    )}
+                </div>
                 <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                     {selectedFile?.isDirectory 
                         ? 'Folder preview not available' 
                         : 'Select a file to preview'}
                 </div>
             </div>
+            
         );
     }
 
@@ -58,6 +82,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ selectedFile, darkMode }) =
                         </div>
                     )}
                     <img 
+                        key={refreshKey}
                         src={`file:///${selectedFile.path}`} 
                         alt={selectedFile.name}
                         className="max-w-full max-h-full object-contain rounded"
@@ -81,6 +106,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ selectedFile, darkMode }) =
                         </div>
                     )}
                     <video 
+                        key={refreshKey}
                         controls 
                         className="w-full rounded"
                         style={{ maxHeight: '400px', display: videoLoading ? 'none' : 'block' }}
@@ -108,6 +134,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ selectedFile, darkMode }) =
                         )}
                     </div>
                     <audio 
+                        key={refreshKey}
                         controls 
                         className="w-full"
                         onLoadedData={() => setAudioLoading(false)}
@@ -132,6 +159,7 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ selectedFile, darkMode }) =
                         </div>
                     )}
                     <iframe 
+                        key={refreshKey}
                         src={`file:///${selectedFile.path}`}
                         className="w-full rounded border"
                         style={{ height: '500px', display: pdfLoading ? 'none' : 'block' }}
@@ -164,9 +192,33 @@ const PreviewPanel: React.FC<PreviewPanelProps> = ({ selectedFile, darkMode }) =
     return (
         <div className={`h-full overflow-auto ${darkMode ? 'bg-[#252525]' : 'bg-white'}`}>
             <div className="p-4">
-                <h3 className={`text-lg font-semibold mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
-                    Preview
-                </h3>
+                <div className="flex justify-between items-center mb-2">
+                    <h3 className={`text-lg font-semibold ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                        Preview
+                    </h3>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleRefresh}
+                            className={`p-2 rounded hover:bg-opacity-10 hover:bg-gray-500 transition-colors ${
+                                darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'
+                            }`}
+                            title="Refresh preview"
+                        >
+                            <i className="pi pi-refresh"></i>
+                        </button>
+                        {onClose && (
+                            <button
+                                onClick={onClose}
+                                className={`p-2 rounded hover:bg-opacity-10 hover:bg-gray-500 transition-colors ${
+                                    darkMode ? 'text-gray-400 hover:text-gray-200' : 'text-gray-600 hover:text-gray-800'
+                                }`}
+                                title="Close preview"
+                            >
+                                <i className="pi pi-times"></i>
+                            </button>
+                        )}
+                    </div>
+                </div>
                 {renderPreview()}
                 <Card className={`mb-2 ${darkMode ? 'bg-[#2a2a2a]' : 'bg-gray-50'}`}>
                     <div className="space-y-2">

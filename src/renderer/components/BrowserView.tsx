@@ -65,6 +65,20 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   const [videoDuration, setVideoDuration] = React.useState<number>(100);
   const [showThumbnails, setShowThumbnails] = React.useState<boolean>(false);
   const [thumbnailCache, setThumbnailCache] = React.useState<Map<string, string>>(new Map());
+  const [sortedFiles, setSortedFiles] = React.useState<FileEntry[]>([]);
+  const [sortBy, setSortBy] = React.useState<'name' | 'time'>('name');
+
+  React.useEffect(() => {
+    // Sort files based on current sort preference
+    const sorted = [...files].sort((a, b) => {
+      if (sortBy === 'name') {
+        return a.name.localeCompare(b.name);
+      } else {
+        return new Date(b.modified).getTime() - new Date(a.modified).getTime();
+      }
+    });
+    setSortedFiles(sorted);
+  }, [files, sortBy]);
 
   React.useEffect(() => {
     checkCopiedState();
@@ -83,6 +97,28 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   const checkCopiedState = async () => {
     const copied = await window.electronAPI.hasCopiedPath();
     setHasCopied(copied);
+  };
+
+  const getFileIcon = (fileName: string): string => {
+    const ext = fileName.toLowerCase().split('.').pop() || '';
+    
+    // PDF files
+    if (ext === 'pdf') {
+      return 'pi pi-file-pdf text-red-500';
+    }
+    
+    // HTML and web files
+    if (['html', 'htm', 'xml', 'xhtml', 'mhtml'].includes(ext)) {
+      return 'pi pi-globe text-blue-500';
+    }
+    
+    // Notepad and Word files
+    if (['txt', 'doc', 'docx', 'rtf', 'odt'].includes(ext)) {
+      return 'pi pi-file-word text-blue-600';
+    }
+    
+    // Default file icon
+    return 'pi pi-file text-blue-400';
   };
 
   const getThumbnailUrl = (file: FileEntry): string | null => {
@@ -680,6 +716,14 @@ const BrowserView: React.FC<BrowserViewProps> = ({
     }
   };
 
+  const handleSortByName = () => {
+    setSortBy('name');
+  };
+
+  const handleSortByTime = () => {
+    setSortBy('time');
+  };
+
   const menuItems: MenuItem[] = selectedFile ? [
     {
       label: 'Open',
@@ -718,6 +762,25 @@ const BrowserView: React.FC<BrowserViewProps> = ({
       separator: true
     },
     {
+      label: 'Sort',
+      icon: 'pi pi-fw pi-sort',
+      items: [
+        {
+          label: 'Sort by Name',
+          icon: 'pi pi-fw pi-sort-alpha-down',
+          command: handleSortByName
+        },
+        {
+          label: 'Sort by Time',
+          icon: 'pi pi-fw pi-sort-numeric-down',
+          command: handleSortByTime
+        }
+      ]
+    },
+    {
+      separator: true
+    },
+    {
       label: 'Delete',
       icon: 'pi pi-fw pi-trash',
       command: handleDelete,
@@ -729,6 +792,25 @@ const BrowserView: React.FC<BrowserViewProps> = ({
       icon: 'pi pi-fw pi-clone',
       command: handlePaste,
       disabled: !hasCopied
+    },
+    {
+      separator: true
+    },
+    {
+      label: 'Sort',
+      icon: 'pi pi-fw pi-sort',
+      items: [
+        {
+          label: 'Sort by Name',
+          icon: 'pi pi-fw pi-sort-alpha-down',
+          command: handleSortByName
+        },
+        {
+          label: 'Sort by Time',
+          icon: 'pi pi-fw pi-sort-numeric-down',
+          command: handleSortByTime
+        }
+      ]
     }
   ];
 
@@ -747,7 +829,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
         {shouldShowThumbnail ? (
           <ThumbnailImage file={rowData} className="w-8 h-8 object-cover rounded" />
         ) : (
-          <i className={`${rowData.isDirectory ? 'pi pi-folder text-yellow-500' : 'pi pi-file text-blue-400'} text-xl`}></i>
+          <i className={`${rowData.isDirectory ? 'pi pi-folder text-yellow-500' : getFileIcon(rowData.name)} text-xl`}></i>
         )}
         <span>{rowData.name}</span>
       </div>
@@ -785,7 +867,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
     if (error || !thumbnailSrc) {
       // Fallback to icon
       return (
-        <i className={`${file.isDirectory ? 'pi pi-folder text-yellow-500' : 'pi pi-file text-blue-400'} ${className || 'text-5xl'}`}></i>
+        <i className={`${file.isDirectory ? 'pi pi-folder text-yellow-500' : getFileIcon(file.name)} ${className || 'text-5xl'}`}></i>
       );
     }
 
@@ -816,7 +898,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
     }
 
     return (
-      <i className={`${file.isDirectory ? 'pi pi-folder text-yellow-500' : 'pi pi-file text-blue-400'} ${className || 'text-5xl'}`}></i>
+      <i className={`${file.isDirectory ? 'pi pi-folder text-yellow-500' : getFileIcon(file.name)} ${className || 'text-5xl'}`}></i>
     );
   };
 
@@ -1100,8 +1182,8 @@ const BrowserView: React.FC<BrowserViewProps> = ({
             <p className={darkMode ? 'text-gray-400' : 'text-gray-600'}>Empty directory</p>
           </div>
         ) : viewMode === 'grid' ? (
-          <div className="p-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '1rem' }}>
-            {files.map((file) => {
+          <div className="p-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '0.5rem' }}>
+            {sortedFiles.map((file) => {
               const shouldShowThumbnail = showThumbnails && !file.isDirectory && (isImage(file.name) || isVideo(file.name));
               
               return (
@@ -1135,7 +1217,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
                       className={`${
                         file.isDirectory 
                           ? 'pi pi-folder text-yellow-500' 
-                          : 'pi pi-file text-blue-400'
+                          : getFileIcon(file.name)
                       } text-5xl mb-2`}
                     ></i>
                   )}
@@ -1158,7 +1240,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
           </div>
         ) : (
           <DataTable
-            value={files}
+            value={sortedFiles}
             stripedRows
             rows={20}
             selectionMode="single"

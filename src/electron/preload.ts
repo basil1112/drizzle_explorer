@@ -46,4 +46,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   extract7zip: (archivePath: string, outputDir?: string): Promise<{success: boolean; outputPath?: string; error?: string}> => ipcRenderer.invoke('extract-7zip', archivePath, outputDir),
   extractNative: (archivePath: string, outputDir?: string): Promise<{success: boolean; outputPath?: string; error?: string}> => ipcRenderer.invoke('extract-native', archivePath, outputDir),
   isCompressedFile: (filePath: string): Promise<boolean> => ipcRenderer.invoke('is-compressed-file', filePath),
+  // Layout theme
+  getLayoutTheme: (): Promise<{layout: string; darkMode: boolean} | undefined> => ipcRenderer.invoke('get-layout-theme'),
+  updateLayout: (layout: string): Promise<any> => ipcRenderer.invoke('update-layout', layout),
+  updateDarkMode: (darkMode: boolean): Promise<any> => ipcRenderer.invoke('update-dark-mode', darkMode),
+  updateLayoutTheme: (layout: string, darkMode: boolean): Promise<any> => ipcRenderer.invoke('update-layout-theme', layout, darkMode),
 });

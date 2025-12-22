@@ -45,6 +45,11 @@ interface ElectronAPI {
   extract7zip: (archivePath: string, outputDir?: string) => Promise<{success: boolean; outputPath?: string; error?: string}>;
   extractNative: (archivePath: string, outputDir?: string) => Promise<{success: boolean; outputPath?: string; error?: string}>;
   isCompressedFile: (filePath: string) => Promise<boolean>;
+  // Layout theme
+  getLayoutTheme: () => Promise<{layout: string; darkMode: boolean} | undefined>;
+  updateLayout: (layout: string) => Promise<LayoutTheme>;
+  updateDarkMode: (darkMode: boolean) => Promise<LayoutTheme>;
+  updateLayoutTheme: (layout: string, darkMode: boolean) => Promise<LayoutTheme>;
 }
 
 export interface Profile {
@@ -59,6 +64,13 @@ export interface TransferQueueItem {
   id: number;
   filePath: string;
   addedAt: string;
+}
+
+export interface LayoutTheme {
+  id: number;
+  layout: string;
+  darkMode: boolean;
+  updatedAt: string;
 }
 
 declare global {

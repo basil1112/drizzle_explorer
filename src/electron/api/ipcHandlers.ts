@@ -4,7 +4,7 @@ import { FileOperationsController } from '../controllers/FileOperationsControlle
 import { VideoOperationsController } from '../controllers/VideoOperationsController';
 import { ImageOperationsController } from '../controllers/ImageOperationsController';
 import { CompressionController } from '../controllers/CompressionController';
-import { getProfile, updateProfile, regenerateUUID, getTransferQueue, addToTransferQueue, removeFromTransferQueue, clearTransferQueue, getSetting, setSetting, getAllSettings } from '../database/db';
+import { getProfile, updateProfile, regenerateUUID, getTransferQueue, addToTransferQueue, removeFromTransferQueue, clearTransferQueue, getSetting, setSetting, getAllSettings, getLayoutTheme, updateLayout, updateDarkMode, updateLayoutTheme } from '../database/db';
 import * as fs from 'fs/promises';
 import * as fsSync from 'fs';
 import * as path from 'path';
@@ -144,6 +144,23 @@ export function registerFileSystemHandlers() {
 
   ipcMain.handle('get-all-settings', async () => {
     return getAllSettings();
+  });
+
+  // Layout theme operations
+  ipcMain.handle('get-layout-theme', async () => {
+    return getLayoutTheme();
+  });
+
+  ipcMain.handle('update-layout', async (event, layout: string) => {
+    return updateLayout(layout);
+  });
+
+  ipcMain.handle('update-dark-mode', async (event, darkMode: boolean) => {
+    return updateDarkMode(darkMode);
+  });
+
+  ipcMain.handle('update-layout-theme', async (event, layout: string, darkMode: boolean) => {
+    return updateLayoutTheme(layout, darkMode);
   });
 
   // Compression operations
