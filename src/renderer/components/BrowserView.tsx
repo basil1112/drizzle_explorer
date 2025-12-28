@@ -974,7 +974,9 @@ const BrowserView: React.FC<BrowserViewProps> = ({
                 { label: 'AVI', value: 'avi' },
                 { label: 'MKV', value: 'mkv' },
                 { label: 'MOV', value: 'mov' },
-                { label: 'WebM', value: 'webm' }
+                { label: 'WebM', value: 'webm' },
+                { label: 'MP3 (Audio Only)', value: 'mp3' },
+                { label: 'WAV (Audio Only)', value: 'wav' }
               ]}
               className="w-full"
             />

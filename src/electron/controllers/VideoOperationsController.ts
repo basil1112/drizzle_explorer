@@ -15,10 +15,27 @@ export class VideoOperationsController {
 
         console.log('Converting video:', filePath, 'to', outputPath);
 
-        ffmpeg(filePath)
-          .output(outputPath)
-          .videoCodec('libx264')
-          .audioCodec('aac')
+        // Check if target format is audio only
+        const audioFormats = ['mp3', 'wav'];
+        const isAudioFormat = audioFormats.includes(targetFormat.toLowerCase());
+
+        const command = ffmpeg(filePath).output(outputPath);
+
+        if (isAudioFormat) {
+          // Audio extraction mode
+          if (targetFormat.toLowerCase() === 'mp3') {
+            command.audioCodec('libmp3lame').audioBitrate('192k');
+          } else if (targetFormat.toLowerCase() === 'wav') {
+            command.audioCodec('pcm_s16le');
+          }
+          // Don't include video stream for audio formats
+          command.noVideo();
+        } else {
+          // Video conversion mode
+          command.videoCodec('libx264').audioCodec('aac');
+        }
+
+        command
           .on('start', (commandLine) => {
             console.log('FFmpeg command:', commandLine);
           })
@@ -26,16 +43,16 @@ export class VideoOperationsController {
             console.log('Processing: ' + progress.percent + '% done');
           })
           .on('end', () => {
-            console.log('Video conversion complete:', outputPath);
+            console.log('Conversion complete:', outputPath);
             resolve(true);
           })
           .on('error', (err) => {
-            console.error('Error converting video:', err.message);
+            console.error('Error converting:', err.message);
             resolve(false);
           })
           .run();
       } catch (error) {
-        console.error('Error setting up video conversion:', error);
+        console.error('Error setting up conversion:', error);
         resolve(false);
       }
     });
