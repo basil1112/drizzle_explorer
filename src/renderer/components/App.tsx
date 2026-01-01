@@ -315,63 +315,75 @@ const App: React.FC = () => {
                 />
             )}
 
-            {/* Tab Content - Splitter with Sidebar | BrowserView | PreviewSection */}
-            <div className="flex-1 overflow-hidden">
-                <Splitter style={{ height: '100%' }} className={darkMode ? 'dark-splitter' : 'light-splitter'}>
-                    {/* Sidebar Panel */}
-                    <SplitterPanel size={15} minSize={10} style={{ overflow: 'hidden',maxWidth: '280px' }}>
-                        <div className="h-full overflow-auto">
-                            <Sidebar
-                                drives={drives}
-                                currentView={currentTab.view}
-                                currentDrive={currentTab.drive}
-                                darkMode={darkMode}
-                                onHomeClick={switchToHomeView}
-                                onDriveClick={selectDrive}
-                                onQuickAccessClick={openQuickAccessFolder}
-                                onSettingsClick={handleSettingsClick}
-                                onTransferClick={handleTransferClick}
-                            />
-                        </div>
-                    </SplitterPanel>
+            {/* Tab Content - Flex Layout with Sidebar | Splitter for BrowserView & PreviewSection */}
+            <div className="flex-1 overflow-hidden flex">
+                {/* Sidebar with collapsible functionality */}
+                <Sidebar
+                    drives={drives}
+                    currentView={currentTab.view}
+                    currentDrive={currentTab.drive}
+                    darkMode={darkMode}
+                    onHomeClick={switchToHomeView}
+                    onDriveClick={selectDrive}
+                    onQuickAccessClick={openQuickAccessFolder}
+                    onSettingsClick={handleSettingsClick}
+                    onTransferClick={handleTransferClick}
+                />
 
-                    {/* BrowserView Panel */}
-                    <SplitterPanel size={60} minSize={30} style={{ overflow: 'hidden' }}>
-                        <div className="h-full w-full overflow-auto">
-                            {currentTab.view === 'home' ? (
-                                <HomeView
-                                    drives={drives}
+                {/* Main Content Area with Splitter for resizable preview */}
+                <div className="flex-1 overflow-hidden">
+                    <Splitter style={{ height: '100%' }} className={darkMode ? 'dark-splitter' : 'light-splitter'}>
+                        {/* BrowserView Panel */}
+                        <SplitterPanel 
+                            size={currentTab.selectedFile && currentTab.view === 'browser' ? 70 : 100} 
+                            minSize={30} 
+                            style={{ overflow: 'hidden' }}
+                        >
+                            <div className="h-full w-full overflow-auto">
+                                {currentTab.view === 'home' ? (
+                                    <HomeView
+                                        drives={drives}
+                                        darkMode={darkMode}
+                                        onDriveClick={selectDrive}
+                                        onQuickAccessClick={openQuickAccessFolder}
+                                    />
+                                ) : currentTab.view === 'settings' ? (
+                                    <SettingsView darkMode={darkMode} />
+                                ) : (
+                                    <BrowserView
+                                        currentPath={currentTab.path}
+                                        files={currentTab.files}
+                                        loading={currentTab.loading}
+                                        error={currentTab.error}
+                                        darkMode={darkMode}
+                                        onBack={goBack}
+                                        onDirectoryClick={loadDirectory}
+                                        onFileSelect={handleFileSelect}
+                                        viewMode={currentTab.viewMode}
+                                    />
+                                )}
+                            </div>
+                        </SplitterPanel>
+
+                        {/* Preview Panel - Always rendered but hidden when not needed */}
+                        <SplitterPanel 
+                            size={30} 
+                            minSize={15} 
+                            style={{ 
+                                overflow: 'hidden',
+                                display: (currentTab.selectedFile && currentTab.view === 'browser') ? 'block' : 'none'
+                            }}
+                        >
+                            {currentTab.selectedFile && (
+                                <PreviewPanel
+                                    selectedFile={currentTab.selectedFile}
                                     darkMode={darkMode}
-                                    onDriveClick={selectDrive}
-                                    onQuickAccessClick={openQuickAccessFolder}
-                                />
-                            ) : currentTab.view === 'settings' ? (
-                                <SettingsView darkMode={darkMode} />
-                            ) : (
-                                <BrowserView
-                                    currentPath={currentTab.path}
-                                    files={currentTab.files}
-                                    loading={currentTab.loading}
-                                    error={currentTab.error}
-                                    darkMode={darkMode}
-                                    onBack={goBack}
-                                    onDirectoryClick={loadDirectory}
-                                    onFileSelect={handleFileSelect}
-                                    viewMode={currentTab.viewMode}
+                                    onClose={handleClosePreview}
                                 />
                             )}
-                        </div>
-                    </SplitterPanel>
-
-                    {/* Preview Panel */}
-                    <SplitterPanel  size={25} minSize={15} style={{ overflow: 'hidden',display: (currentTab.selectedFile && currentTab.view === 'browser') ? 'block' : 'none' }}>
-                        <PreviewPanel
-                            selectedFile={currentTab.selectedFile}
-                            darkMode={darkMode}
-                            onClose={handleClosePreview}
-                        />
-                    </SplitterPanel>
-                </Splitter>
+                        </SplitterPanel>
+                    </Splitter>
+                </div>
             </div>
 
             {/* Transfer Modal - floats above everything */}

@@ -11,6 +11,7 @@ import { Dialog } from 'primereact/dialog';
 import { InputText } from 'primereact/inputtext';
 import { Dropdown } from 'primereact/dropdown';
 import { Slider } from 'primereact/slider';
+import { Checkbox } from 'primereact/checkbox';
 import { isVideo, isImage, formatFileSize } from '../utils/fileTypeUtils';
 
 interface FileEntry {
@@ -47,6 +48,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
 }) => {
   const cm = useRef<ContextMenu>(null);
   const [selectedFile, setSelectedFile] = React.useState<FileEntry | null>(null);
+  const [selectedFiles, setSelectedFiles] = React.useState<FileEntry[]>([]);
   const [hasCopied, setHasCopied] = React.useState<boolean>(false);
   const [isOperating, setIsOperating] = React.useState<boolean>(false);
   const [operationMessage, setOperationMessage] = React.useState<string>('');
@@ -67,6 +69,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   const [thumbnailCache, setThumbnailCache] = React.useState<Map<string, string>>(new Map());
   const [sortedFiles, setSortedFiles] = React.useState<FileEntry[]>([]);
   const [sortBy, setSortBy] = React.useState<'name' | 'time'>('name');
+  const [batchProgress, setBatchProgress] = React.useState<{ current: number; total: number } | null>(null);
 
   React.useEffect(() => {
     // Sort files based on current sort preference
@@ -150,45 +153,62 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   };
 
   const handleCopy = async () => {
-    if (selectedFile) {
-      console.log('Copying:', selectedFile.path);
-      await window.electronAPI.copyPath(selectedFile.path);
+    const filesToCopy = selectedFiles.length > 0 ? selectedFiles : (selectedFile ? [selectedFile] : []);
+    if (filesToCopy.length > 0) {
+      console.log('Copying:', filesToCopy.length, 'file(s)');
+      // For now, copy the first file's path (or implement multi-path copy in backend)
+      await window.electronAPI.copyPath(filesToCopy[0].path);
       setHasCopied(true);
       console.log('Copy complete, hasCopied set to true');
     }
   };
 
   const handleDelete = () => {
-    if (selectedFile) {
-      setFileToDelete(selectedFile);
+    const filesToDelete = selectedFiles.length > 0 ? selectedFiles : (selectedFile ? [selectedFile] : []);
+    if (filesToDelete.length > 0) {
+      setFileToDelete(filesToDelete[0]); // Store for dialog display
       setShowDeleteDialog(true);
     }
   };
 
   const confirmDelete = async () => {
-    if (fileToDelete) {
+    const filesToDelete = selectedFiles.length > 0 ? selectedFiles : (fileToDelete ? [fileToDelete] : []);
+    if (filesToDelete.length > 0) {
       setShowDeleteDialog(false);
       setIsOperating(true);
-      setOperationMessage(`Deleting ${fileToDelete.name}...`);
-      console.log('Deleting:', fileToDelete.path);
-      const success = await window.electronAPI.deletePath(fileToDelete.path);
-      console.log('Delete result:', success);
-      if (success) {
-        setOperationMessage('Delete complete!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-          // Refresh the directory
-          onDirectoryClick(currentPath);
-        }, 1000);
-      } else {
-        setOperationMessage('Delete failed!');
-        console.error('Delete operation failed');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-        }, 2000);
+      
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (let i = 0; i < filesToDelete.length; i++) {
+        const file = filesToDelete[i];
+        setBatchProgress({ current: i + 1, total: filesToDelete.length });
+        setOperationMessage(`Deleting (${i + 1}/${filesToDelete.length}): ${file.name}...`);
+        console.log('Deleting:', file.path);
+        
+        const success = await window.electronAPI.deletePath(file.path);
+        if (success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
       }
+      
+      setBatchProgress(null);
+      
+      if (failCount === 0) {
+        setOperationMessage(`Deleted ${successCount} file(s) successfully!`);
+      } else {
+        setOperationMessage(`Deleted ${successCount} file(s), ${failCount} failed`);
+      }
+      
+      setTimeout(() => {
+        setIsOperating(false);
+        setOperationMessage('');
+        setSelectedFiles([]);
+        onDirectoryClick(currentPath);
+      }, 2000);
+      
       setFileToDelete(null);
     }
   };
@@ -207,14 +227,16 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   };
 
   const handleConvert = () => {
-    if (selectedFile) {
+    const filesToConvert = selectedFiles.length > 0 ? selectedFiles.filter(f => isVideoFile(f.name)) : (selectedFile && isVideoFile(selectedFile.name) ? [selectedFile] : []);
+    if (filesToConvert.length > 0) {
       setConvertFormat('mp4');
       setShowConvertDialog(true);
     }
   };
 
   const handleScaleDown = () => {
-    if (selectedFile) {
+    const filesToScale = selectedFiles.length > 0 ? selectedFiles.filter(f => isVideoFile(f.name)) : (selectedFile && isVideoFile(selectedFile.name) ? [selectedFile] : []);
+    if (filesToScale.length > 0) {
       setScaleResolution('1280x720');
       setShowScaleDialog(true);
     }
@@ -299,52 +321,82 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   };
 
   const confirmConvert = async () => {
-    if (selectedFile) {
+    const filesToConvert = selectedFiles.length > 0 ? selectedFiles.filter(f => isVideoFile(f.name)) : (selectedFile && isVideoFile(selectedFile.name) ? [selectedFile] : []);
+    if (filesToConvert.length > 0) {
       setShowConvertDialog(false);
       setIsOperating(true);
-      setOperationMessage(`Converting ${selectedFile.name} to ${convertFormat}...`);
-      console.log('Converting:', selectedFile.path, 'to', convertFormat);
-      const success = await window.electronAPI.convertVideo(selectedFile.path, convertFormat);
-      console.log('Convert result:', success);
-      if (success) {
-        setOperationMessage('Convert complete!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-          onDirectoryClick(currentPath);
-        }, 1000);
-      } else {
-        setOperationMessage('Convert failed!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-        }, 2000);
+      
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (let i = 0; i < filesToConvert.length; i++) {
+        const file = filesToConvert[i];
+        setBatchProgress({ current: i + 1, total: filesToConvert.length });
+        setOperationMessage(`Converting (${i + 1}/${filesToConvert.length}): ${file.name} to ${convertFormat}...`);
+        console.log('Converting:', file.path, 'to', convertFormat);
+        
+        const success = await window.electronAPI.convertVideo(file.path, convertFormat);
+        if (success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
       }
+      
+      setBatchProgress(null);
+      
+      if (failCount === 0) {
+        setOperationMessage(`Converted ${successCount} file(s) successfully!`);
+      } else {
+        setOperationMessage(`Converted ${successCount} file(s), ${failCount} failed`);
+      }
+      
+      setTimeout(() => {
+        setIsOperating(false);
+        setOperationMessage('');
+        setSelectedFiles([]);
+        onDirectoryClick(currentPath);
+      }, 2000);
     }
   };
 
   const confirmScaleDown = async () => {
-    if (selectedFile) {
+    const filesToScale = selectedFiles.length > 0 ? selectedFiles.filter(f => isVideoFile(f.name)) : (selectedFile && isVideoFile(selectedFile.name) ? [selectedFile] : []);
+    if (filesToScale.length > 0) {
       setShowScaleDialog(false);
       setIsOperating(true);
-      setOperationMessage(`Scaling down ${selectedFile.name} to ${scaleResolution}...`);
-      console.log('Scaling:', selectedFile.path, 'to', scaleResolution);
-      const success = await window.electronAPI.scaleVideo(selectedFile.path, scaleResolution);
-      console.log('Scale result:', success);
-      if (success) {
-        setOperationMessage('Scale complete!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-          onDirectoryClick(currentPath);
-        }, 1000);
-      } else {
-        setOperationMessage('Scale failed!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-        }, 2000);
+      
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (let i = 0; i < filesToScale.length; i++) {
+        const file = filesToScale[i];
+        setBatchProgress({ current: i + 1, total: filesToScale.length });
+        setOperationMessage(`Scaling (${i + 1}/${filesToScale.length}): ${file.name} to ${scaleResolution}...`);
+        console.log('Scaling:', file.path, 'to', scaleResolution);
+        
+        const success = await window.electronAPI.scaleVideo(file.path, scaleResolution);
+        if (success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
       }
+      
+      setBatchProgress(null);
+      
+      if (failCount === 0) {
+        setOperationMessage(`Scaled ${successCount} file(s) successfully!`);
+      } else {
+        setOperationMessage(`Scaled ${successCount} file(s), ${failCount} failed`);
+      }
+      
+      setTimeout(() => {
+        setIsOperating(false);
+        setOperationMessage('');
+        setSelectedFiles([]);
+        onDirectoryClick(currentPath);
+      }, 2000);
     }
   };
 
@@ -376,82 +428,128 @@ const BrowserView: React.FC<BrowserViewProps> = ({
   };
 
   const handleConvertImage = () => {
-    if (selectedFile) {
+    const filesToConvert = selectedFiles.length > 0 ? selectedFiles.filter(f => isImageFile(f.name)) : (selectedFile && isImageFile(selectedFile.name) ? [selectedFile] : []);
+    if (filesToConvert.length > 0) {
       setImageFormat('png');
       setShowImageConvertDialog(true);
     }
   };
 
   const handleSharpenImage = async () => {
-    if (selectedFile) {
+    const filesToSharpen = selectedFiles.length > 0 ? selectedFiles.filter(f => isImageFile(f.name)) : (selectedFile && isImageFile(selectedFile.name) ? [selectedFile] : []);
+    if (filesToSharpen.length > 0) {
       setIsOperating(true);
-      setOperationMessage(`Sharpening ${selectedFile.name}...`);
-      console.log('Sharpening:', selectedFile.path);
-      const success = await window.electronAPI.sharpenImage(selectedFile.path);
-      console.log('Sharpen result:', success);
-      if (success) {
-        setOperationMessage('Sharpen complete!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-          onDirectoryClick(currentPath);
-        }, 1000);
-      } else {
-        setOperationMessage('Sharpen failed!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-        }, 2000);
+      
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (let i = 0; i < filesToSharpen.length; i++) {
+        const file = filesToSharpen[i];
+        setBatchProgress({ current: i + 1, total: filesToSharpen.length });
+        setOperationMessage(`Sharpening (${i + 1}/${filesToSharpen.length}): ${file.name}...`);
+        console.log('Sharpening:', file.path);
+        
+        const success = await window.electronAPI.sharpenImage(file.path);
+        if (success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
       }
+      
+      setBatchProgress(null);
+      
+      if (failCount === 0) {
+        setOperationMessage(`Sharpened ${successCount} image(s) successfully!`);
+      } else {
+        setOperationMessage(`Sharpened ${successCount} image(s), ${failCount} failed`);
+      }
+      
+      setTimeout(() => {
+        setIsOperating(false);
+        setOperationMessage('');
+        setSelectedFiles([]);
+        onDirectoryClick(currentPath);
+      }, 2000);
     }
   };
 
   const handleCompressImage = async () => {
-    if (selectedFile) {
+    const filesToCompress = selectedFiles.length > 0 ? selectedFiles.filter(f => isImageFile(f.name)) : (selectedFile && isImageFile(selectedFile.name) ? [selectedFile] : []);
+    if (filesToCompress.length > 0) {
       setIsOperating(true);
-      setOperationMessage(`Compressing ${selectedFile.name}...`);
-      console.log('Compressing:', selectedFile.path);
-      const success = await window.electronAPI.compressImage(selectedFile.path);
-      console.log('Compress result:', success);
-      if (success) {
-        setOperationMessage('Compress complete!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-          onDirectoryClick(currentPath);
-        }, 1000);
-      } else {
-        setOperationMessage('Compress failed!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-        }, 2000);
+      
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (let i = 0; i < filesToCompress.length; i++) {
+        const file = filesToCompress[i];
+        setBatchProgress({ current: i + 1, total: filesToCompress.length });
+        setOperationMessage(`Compressing (${i + 1}/${filesToCompress.length}): ${file.name}...`);
+        console.log('Compressing:', file.path);
+        
+        const success = await window.electronAPI.compressImage(file.path);
+        if (success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
       }
+      
+      setBatchProgress(null);
+      
+      if (failCount === 0) {
+        setOperationMessage(`Compressed ${successCount} image(s) successfully!`);
+      } else {
+        setOperationMessage(`Compressed ${successCount} image(s), ${failCount} failed`);
+      }
+      
+      setTimeout(() => {
+        setIsOperating(false);
+        setOperationMessage('');
+        setSelectedFiles([]);
+        onDirectoryClick(currentPath);
+      }, 2000);
     }
   };
 
   const confirmConvertImage = async () => {
-    if (selectedFile) {
+    const filesToConvert = selectedFiles.length > 0 ? selectedFiles.filter(f => isImageFile(f.name)) : (selectedFile && isImageFile(selectedFile.name) ? [selectedFile] : []);
+    if (filesToConvert.length > 0) {
       setShowImageConvertDialog(false);
       setIsOperating(true);
-      setOperationMessage(`Converting ${selectedFile.name} to ${imageFormat}...`);
-      console.log('Converting image:', selectedFile.path, 'to', imageFormat);
-      const success = await window.electronAPI.convertImage(selectedFile.path, imageFormat);
-      console.log('Convert result:', success);
-      if (success) {
-        setOperationMessage('Convert complete!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-          onDirectoryClick(currentPath);
-        }, 1000);
-      } else {
-        setOperationMessage('Convert failed!');
-        setTimeout(() => {
-          setIsOperating(false);
-          setOperationMessage('');
-        }, 2000);
+      
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (let i = 0; i < filesToConvert.length; i++) {
+        const file = filesToConvert[i];
+        setBatchProgress({ current: i + 1, total: filesToConvert.length });
+        setOperationMessage(`Converting (${i + 1}/${filesToConvert.length}): ${file.name} to ${imageFormat}...`);
+        console.log('Converting image:', file.path, 'to', imageFormat);
+        
+        const success = await window.electronAPI.convertImage(file.path, imageFormat);
+        if (success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
       }
+      
+      setBatchProgress(null);
+      
+      if (failCount === 0) {
+        setOperationMessage(`Converted ${successCount} image(s) successfully!`);
+      } else {
+        setOperationMessage(`Converted ${successCount} image(s), ${failCount} failed`);
+      }
+      
+      setTimeout(() => {
+        setIsOperating(false);
+        setOperationMessage('');
+        setSelectedFiles([]);
+        onDirectoryClick(currentPath);
+      }, 2000);
     }
   };
 
@@ -932,8 +1030,17 @@ const BrowserView: React.FC<BrowserViewProps> = ({
         <div className="flex items-center gap-3">
           <i className="pi pi-exclamation-triangle text-4xl text-orange-500"></i>
           <div>
-            <p className="mb-2">Are you sure you want to delete this {fileToDelete?.isDirectory ? 'folder' : 'file'}?</p>
-            <p className="font-semibold">{fileToDelete?.name}</p>
+            {selectedFiles.length > 0 ? (
+              <>
+                <p className="mb-2">Are you sure you want to delete {selectedFiles.length} selected item(s)?</p>
+                <p className="text-sm text-gray-500">This action cannot be undone.</p>
+              </>
+            ) : (
+              <>
+                <p className="mb-2">Are you sure you want to delete this {fileToDelete?.isDirectory ? 'folder' : 'file'}?</p>
+                <p className="font-semibold">{fileToDelete?.name}</p>
+              </>
+            )}
           </div>
         </div>
       </Dialog>
@@ -962,7 +1069,13 @@ const BrowserView: React.FC<BrowserViewProps> = ({
       >
         <div className="flex flex-col gap-4">
           <div>
-            <label className="block mb-2 font-semibold">File: {selectedFile?.name}</label>
+            {selectedFiles.length > 0 ? (
+              <label className="block mb-2 font-semibold">
+                Converting {selectedFiles.filter(f => isVideoFile(f.name)).length} video file(s)
+              </label>
+            ) : (
+              <label className="block mb-2 font-semibold">File: {selectedFile?.name}</label>
+            )}
           </div>
           <div>
             <label className="block mb-2">Convert to:</label>
@@ -1008,7 +1121,13 @@ const BrowserView: React.FC<BrowserViewProps> = ({
       >
         <div className="flex flex-col gap-4">
           <div>
-            <label className="block mb-2 font-semibold">File: {selectedFile?.name}</label>
+            {selectedFiles.length > 0 ? (
+              <label className="block mb-2 font-semibold">
+                Scaling {selectedFiles.filter(f => isVideoFile(f.name)).length} video file(s)
+              </label>
+            ) : (
+              <label className="block mb-2 font-semibold">File: {selectedFile?.name}</label>
+            )}
           </div>
           <div>
             <label className="block mb-2">Scale to resolution:</label>
@@ -1094,7 +1213,13 @@ const BrowserView: React.FC<BrowserViewProps> = ({
       >
         <div className="flex flex-col gap-4">
           <div>
-            <label className="block mb-2 font-semibold">File: {selectedFile?.name}</label>
+            {selectedFiles.length > 0 ? (
+              <label className="block mb-2 font-semibold">
+                Converting {selectedFiles.filter(f => isImageFile(f.name)).length} image file(s)
+              </label>
+            ) : (
+              <label className="block mb-2 font-semibold">File: {selectedFile?.name}</label>
+            )}
           </div>
           <div>
             <label className="block mb-2">Convert to:</label>
@@ -1163,6 +1288,27 @@ const BrowserView: React.FC<BrowserViewProps> = ({
         </div>
       </Dialog>
 
+      {/* Selection Info Bar */}
+      {selectedFiles.length > 0 && (
+        <div className={`mb-2 p-3 rounded flex items-center justify-between ${
+          darkMode ? 'bg-[#2d2d30] border border-[#3e3e42]' : 'bg-blue-50 border border-blue-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            <i className="pi pi-check-square text-blue-500"></i>
+            <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>
+              {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
+            </span>
+          </div>
+          <Button
+            label="Clear Selection"
+            icon="pi pi-times"
+            onClick={() => setSelectedFiles([])}
+            className="p-button-text p-button-sm"
+            severity="secondary"
+          />
+        </div>
+      )}
+
       {/* File Display - List or Grid */}
       <Card onContextMenu={handleBackgroundContextMenu}>
         {loading ? (
@@ -1187,20 +1333,34 @@ const BrowserView: React.FC<BrowserViewProps> = ({
           <div className="p-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '0.5rem' }}>
             {sortedFiles.map((file) => {
               const shouldShowThumbnail = showThumbnails && !file.isDirectory && (isImage(file.name) || isVideo(file.name));
+              const isSelected = selectedFiles.some(f => f.path === file.path);
               
               return (
                 <div
                   key={file.path}
-                  className={`flex flex-col items-center p-3 rounded-lg cursor-pointer transition-colors ${
-                    darkMode 
-                      ? 'hover:bg-[#2d2d30] border border-[#3e3e42]' 
-                      : 'hover:bg-gray-100 border border-gray-200'
+                  className={`flex flex-col items-center p-3 rounded-lg cursor-pointer transition-colors relative ${
+                    isSelected
+                      ? darkMode
+                        ? 'bg-[#094771] border-2 border-[#007fd4]'
+                        : 'bg-blue-100 border-2 border-blue-500'
+                      : darkMode 
+                        ? 'hover:bg-[#2d2d30] border border-[#3e3e42]' 
+                        : 'hover:bg-gray-100 border border-gray-200'
                   }`}
-                  onClick={() => {
-                    if (file.isDirectory) {
-                      onDirectoryClick(file.path);
+                  onClick={(e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                      // Toggle selection
+                      if (isSelected) {
+                        setSelectedFiles(selectedFiles.filter(f => f.path !== file.path));
+                      } else {
+                        setSelectedFiles([...selectedFiles, file]);
+                      }
                     } else {
-                      onFileSelect?.(file);
+                      if (file.isDirectory) {
+                        onDirectoryClick(file.path);
+                      } else {
+                        onFileSelect?.(file);
+                      }
                     }
                   }}
                   onContextMenu={(e) => {
@@ -1210,6 +1370,20 @@ const BrowserView: React.FC<BrowserViewProps> = ({
                     cm.current?.show(e as any);
                   }}
                 >
+                  <div className="absolute top-1 left-1 z-10">
+                    <Checkbox
+                      checked={isSelected}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        if (e.checked) {
+                          setSelectedFiles([...selectedFiles, file]);
+                        } else {
+                          setSelectedFiles(selectedFiles.filter(f => f.path !== file.path));
+                        }
+                      }}
+                      className="p-checkbox-sm"
+                    />
+                  </div>
                   {shouldShowThumbnail ? (
                     <div className="w-full aspect-square mb-2 flex items-center justify-center overflow-hidden rounded">
                       <ThumbnailImage file={file} className="w-full h-full object-cover" />
@@ -1245,7 +1419,10 @@ const BrowserView: React.FC<BrowserViewProps> = ({
             value={sortedFiles}
             stripedRows
             rows={20}
-            selectionMode="single"
+            selection={selectedFiles}
+            onSelectionChange={(e) => setSelectedFiles(e.value)}
+            selectionMode="checkbox"
+            dataKey="path"
             onRowClick={(e) => {
               if (e.data.isDirectory) {
                 onDirectoryClick(e.data.path);
@@ -1262,8 +1439,6 @@ const BrowserView: React.FC<BrowserViewProps> = ({
               checkCopiedState();
               cm.current?.show(e.originalEvent);
             }}
-            contextMenuSelection={selectedFile || undefined}
-            onContextMenuSelectionChange={(e) => setSelectedFile(e.value as FileEntry)}
             className="cursor-pointer"
             emptyMessage={
               <div
@@ -1275,6 +1450,7 @@ const BrowserView: React.FC<BrowserViewProps> = ({
               </div>
             }
           >
+            <Column selectionMode="multiple" headerStyle={{ width: '3rem' }} style={{ width: '3rem' }}></Column>
             <Column field="name" header="Name" body={nameBodyTemplate} sortable></Column>
             <Column field="size" header="Size" body={sizeBodyTemplate} sortable></Column>
             <Column field="modified" header="Modified" body={modifiedBodyTemplate} sortable></Column>
@@ -1289,7 +1465,15 @@ const BrowserView: React.FC<BrowserViewProps> = ({
             <i className="pi pi-spin pi-spinner text-primary"></i>
             <span className={darkMode ? 'text-gray-300' : 'text-gray-700'}>{operationMessage}</span>
           </div>
-          <ProgressBar mode="indeterminate" style={{ height: '6px' }} />
+          {batchProgress ? (
+            <ProgressBar 
+              value={(batchProgress.current / batchProgress.total) * 100} 
+              style={{ height: '6px' }}
+              showValue={false}
+            />
+          ) : (
+            <ProgressBar mode="indeterminate" style={{ height: '6px' }} />
+          )}
         </div>
       )}
     </div>
